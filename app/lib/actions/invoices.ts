@@ -7,7 +7,8 @@ import type { TH_InvoiceStatus } from '@prisma/client'
 import { prisma } from '@/app/lib/prisma'
 import { authOptions } from '@/app/lib/auth'
 import { hasMinRole } from '@/app/lib/api-auth'
-import { computeTax, rateForState } from '@/app/lib/tax'
+import { computeTax } from '@/app/lib/tax'
+import { rateForStateAsync } from '@/app/lib/tax-server'
 
 const ADMIN_ROLES = new Set(['GLOBAL_ADMIN', 'TICKETHUB_ADMIN'])
 
@@ -49,7 +50,7 @@ export async function createInvoiceForClient(
     }
 
     const taxState = client.billingState.toUpperCase()
-    const taxRate = rateForState(taxState)
+    const taxRate = await rateForStateAsync(taxState)
 
     const charges = await prisma.tH_Charge.findMany({
       where: {

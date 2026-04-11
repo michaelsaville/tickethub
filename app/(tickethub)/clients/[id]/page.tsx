@@ -239,6 +239,14 @@ export default async function ClientDetailPage({
             <SectionHeader
               title="Contracts"
               count={client.contracts.length}
+              action={
+                <Link
+                  href={`/clients/${client.id}/contracts`}
+                  className="text-xs text-th-text-secondary hover:text-accent"
+                >
+                  Manage →
+                </Link>
+              }
             />
             <ul className="space-y-2">
               {client.contracts.map((c) => (

@@ -8,6 +8,8 @@ import { CommentComposer } from './CommentComposer'
 import { Attachments } from './Attachments'
 import { QuickCharge } from './QuickCharge'
 import { ChargesTable } from './ChargesTable'
+import { TimerControls } from './TimerControls'
+import { getMyTimer } from '@/app/lib/actions/timer'
 
 export const dynamic = 'force-dynamic'
 
@@ -78,6 +80,7 @@ export default async function TicketDetailPage({
     })
   }
 
+  const myTimer = await getMyTimer()
   const [techs, items] = await Promise.all([
     prisma.tH_User.findMany({
       where: { isActive: true },
@@ -143,6 +146,25 @@ export default async function TicketDetailPage({
             type={ticket.type}
             techs={techs}
           />
+          <div className="mt-4">
+            <TimerControls
+              ticketId={ticket.id}
+              items={items}
+              initial={
+                myTimer
+                  ? {
+                      id: myTimer.id,
+                      ticketId: myTimer.ticketId,
+                      startedAtMs: myTimer.startedAt.getTime(),
+                      pausedAtMs: myTimer.pausedAt
+                        ? myTimer.pausedAt.getTime()
+                        : null,
+                      pausedMs: myTimer.pausedMs,
+                    }
+                  : null
+              }
+            />
+          </div>
           <dl className="th-card mt-4 space-y-3 text-xs">
             {ticket.site && (
               <div>

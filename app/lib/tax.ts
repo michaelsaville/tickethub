@@ -1,23 +1,33 @@
 /**
  * Sales tax rates keyed by US state code (ISO 3166-2). Stored as basis
- * points — 600 = 6.00%. Stored as integers so we can freeze them onto
- * TH_Invoice.taxRate without floating-point drift.
+ * points — 600 = 6.00%. Historical invoices snapshot their own taxRate at
+ * creation time, so changing the table later doesn't re-bill old work.
  *
- * Update this table when a state changes its rate. Historical invoices
- * are unaffected because each TH_Invoice snapshots its own taxRate at
- * creation time.
+ * Rates live in TH_TaxRate (editable via /settings/tax-rates). This
+ * in-code table is the seed set written to the DB the first time a rate
+ * is queried and no row exists for the state yet.
  */
-export const TAX_RATES_BPS: Record<string, number> = {
+export const DEFAULT_TAX_RATES_BPS: Record<string, number> = {
   WV: 600, // 6.00%
   MD: 600,
   PA: 600,
 }
 
-export const SUPPORTED_TAX_STATES = Object.keys(TAX_RATES_BPS).sort()
+export const DEFAULT_SUPPORTED_STATES = Object.keys(DEFAULT_TAX_RATES_BPS).sort()
 
+// Legacy exports kept for components that still import them — these now
+// resolve asynchronously via getRatesFromDb() below.
+export const TAX_RATES_BPS = DEFAULT_TAX_RATES_BPS
+export const SUPPORTED_TAX_STATES = DEFAULT_SUPPORTED_STATES
+
+/**
+ * Synchronous lookup against the in-code default table. Used by client
+ * components and as a last-resort fallback. The server-side invoice
+ * creation path uses rateForStateAsync() which hits the DB first.
+ */
 export function rateForState(stateCode: string | null | undefined): number {
   if (!stateCode) return 0
-  return TAX_RATES_BPS[stateCode.toUpperCase()] ?? 0
+  return DEFAULT_TAX_RATES_BPS[stateCode.toUpperCase()] ?? 0
 }
 
 export function formatRate(bps: number): string {

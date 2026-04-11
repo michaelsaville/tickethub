@@ -628,6 +628,37 @@ model TH_KBArticle {
   @@schema("tickethub")
 }
 
+// ─── TAX RATES ────────────────────────────────────────────────────────────
+
+model TH_TaxRate {
+  id        String   @id @default(cuid())
+  state     String   @unique // ISO 3166-2 US state code (WV/MD/PA/…)
+  rateBps   Int      // basis points — 600 = 6.00%
+  label     String?  // optional display name ("West Virginia")
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("th_tax_rates")
+  @@schema("tickethub")
+}
+
+// ─── TICKET TIMER (in-progress work time) ────────────────────────────────
+
+model TH_TicketTimer {
+  id        String    @id @default(cuid())
+  userId    String    @unique // one active timer per user
+  ticketId  String
+  startedAt DateTime  @default(now())
+  /// When set, the timer is paused. pausedAt→resume adds to pausedMs.
+  pausedAt  DateTime?
+  pausedMs  Int       @default(0)
+  note      String?
+  createdAt DateTime  @default(now())
+
+  @@map("th_ticket_timers")
+  @@schema("tickethub")
+}
+
 // ─── SLA POLICIES ─────────────────────────────────────────────────────────
 
 model TH_SlaPolicy {

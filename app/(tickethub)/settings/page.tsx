@@ -18,6 +18,11 @@ const GROUPS = [
         title: 'Item Catalog',
         description: 'Labor rates, parts, and expense items',
       },
+      {
+        href: '/settings/tax-rates',
+        title: 'Tax Rates',
+        description: 'Sales tax rate per state',
+      },
     ],
   },
   {
