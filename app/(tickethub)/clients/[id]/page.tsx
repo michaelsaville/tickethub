@@ -119,7 +119,18 @@ export default async function ClientDetailPage({
 
         <aside className="space-y-6">
           <section>
-            <SectionHeader title="Contacts" count={client.contacts.length} />
+            <SectionHeader
+              title="Contacts"
+              count={client.contacts.length}
+              action={
+                <Link
+                  href={`/clients/${client.id}/contacts`}
+                  className="text-xs text-th-text-secondary hover:text-accent"
+                >
+                  Manage →
+                </Link>
+              }
+            />
             {client.contacts.length === 0 ? (
               <div className="th-card text-center text-xs text-th-text-secondary">
                 No contacts yet.
@@ -160,7 +171,18 @@ export default async function ClientDetailPage({
           </section>
 
           <section>
-            <SectionHeader title="Sites" count={client.sites.length} />
+            <SectionHeader
+              title="Sites"
+              count={client.sites.length}
+              action={
+                <Link
+                  href={`/clients/${client.id}/sites`}
+                  className="text-xs text-th-text-secondary hover:text-accent"
+                >
+                  Manage →
+                </Link>
+              }
+            />
             {client.sites.length === 0 ? (
               <div className="th-card text-center text-xs text-th-text-secondary">
                 No sites yet.
