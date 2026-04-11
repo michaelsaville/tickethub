@@ -8,6 +8,7 @@ import type {
 } from '@prisma/client'
 import {
   assignTicket,
+  updateTicketContract,
   updateTicketPriority,
   updateTicketStatus,
 } from '@/app/lib/actions/tickets'
@@ -29,19 +30,24 @@ export function TicketProperties({
   status: initialStatus,
   priority: initialPriority,
   assignedToId: initialAssignedToId,
+  contractId: initialContractId,
   type,
   techs,
+  contracts,
 }: {
   ticketId: string
   status: TH_TicketStatus
   priority: TH_TicketPriority
   assignedToId: string | null
+  contractId: string | null
   type: TH_TicketType
   techs: Array<{ id: string; name: string }>
+  contracts: Array<{ id: string; name: string; type: string; isGlobal: boolean }>
 }) {
   const [status, setStatus] = useState(initialStatus)
   const [priority, setPriority] = useState(initialPriority)
   const [assignedToId, setAssignedToId] = useState(initialAssignedToId ?? '')
+  const [contractId, setContractId] = useState(initialContractId ?? '')
   const [isPending, startTransition] = useTransition()
   const [err, setErr] = useState<string | null>(null)
 
@@ -121,6 +127,32 @@ export function TicketProperties({
           ))}
         </select>
       </div>
+
+      {contracts.length > 0 && (
+        <div>
+          <label className="mb-1 block font-mono text-[10px] uppercase tracking-wider text-th-text-muted">
+            Contract
+          </label>
+          <select
+            value={contractId}
+            disabled={isPending}
+            onChange={(e) => {
+              const v = e.target.value
+              setContractId(v)
+              wrap(() => updateTicketContract(ticketId, v || null))
+            }}
+            className="th-input"
+          >
+            <option value="">None</option>
+            {contracts.map((c) => (
+              <option key={c.id} value={c.id}>
+                {c.name} · {c.type}
+                {c.isGlobal ? ' (default)' : ''}
+              </option>
+            ))}
+          </select>
+        </div>
+      )}
 
       <div>
         <label className="mb-1 block font-mono text-[10px] uppercase tracking-wider text-th-text-muted">

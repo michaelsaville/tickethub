@@ -16,6 +16,13 @@ interface ClientContext {
     status: string
     priority: string
   }>
+  contracts: Array<{
+    id: string
+    name: string
+    type: string
+    status: string
+    isGlobal: boolean
+  }>
 }
 
 export function NewTicketForm({
@@ -32,6 +39,7 @@ export function NewTicketForm({
     null,
   )
   const [clientId, setClientId] = useState(initialClientId)
+  const [contractId, setContractId] = useState<string>('')
   const [context, setContext] = useState<ClientContext | null>(null)
   const [loadingContext, setLoadingContext] = useState(false)
 
@@ -47,6 +55,7 @@ export function NewTicketForm({
       .then((res) => {
         if (res.error) return
         const data = res.data
+        const contracts = (data.contracts ?? []) as ClientContext['contracts']
         setContext({
           internalNotes: data.internalNotes ?? null,
           openTickets: (data.tickets ?? []).map(
@@ -58,7 +67,11 @@ export function NewTicketForm({
               priority: string
             }) => t,
           ),
+          contracts,
         })
+        // Default to the Global Contract when switching clients
+        const global = contracts.find((c) => c.isGlobal)
+        setContractId(global?.id ?? '')
       })
       .catch((e) => {
         if (e.name !== 'AbortError') console.error(e)
@@ -70,6 +83,7 @@ export function NewTicketForm({
   return (
     <div className="grid gap-6 lg:grid-cols-[1fr,320px]">
       <form action={formAction} className="th-card space-y-4">
+        <input type="hidden" name="contractId" value={contractId} />
         <div>
           <label
             htmlFor="clientId"
@@ -96,6 +110,32 @@ export function NewTicketForm({
             ))}
           </select>
         </div>
+
+        {context && context.contracts.length > 1 && (
+          <div>
+            <label className="mb-1 block font-mono text-[10px] uppercase tracking-wider text-th-text-muted">
+              Contract
+            </label>
+            <select
+              value={contractId}
+              onChange={(e) => setContractId(e.target.value)}
+              className="th-input"
+            >
+              {context.contracts
+                .filter((c) => c.status === 'ACTIVE' || c.isGlobal)
+                .map((c) => (
+                  <option key={c.id} value={c.id}>
+                    {c.name} · {c.type}
+                    {c.isGlobal ? ' (default)' : ''}
+                  </option>
+                ))}
+            </select>
+            <p className="mt-1 text-xs text-th-text-muted">
+              Block-hours and recurring contracts only track usage for
+              tickets attached to them.
+            </p>
+          </div>
+        )}
 
         <div>
           <label

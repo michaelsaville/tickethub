@@ -10,6 +10,8 @@ import { QuickCharge } from './QuickCharge'
 import { ChargesTable } from './ChargesTable'
 import { TimerControls } from './TimerControls'
 import { PartsCard } from './PartsCard'
+import { ChecklistCard } from './ChecklistCard'
+import type { ChecklistItem } from '@/app/lib/actions/checklist'
 import { getMyTimer } from '@/app/lib/actions/timer'
 
 export const dynamic = 'force-dynamic'
@@ -43,6 +45,16 @@ export default async function TicketDetailPage({
               title: true,
               status: true,
               priority: true,
+            },
+          },
+          contracts: {
+            where: { OR: [{ status: 'ACTIVE' }, { isGlobal: true }] },
+            orderBy: [{ isGlobal: 'desc' }, { createdAt: 'desc' }],
+            select: {
+              id: true,
+              name: true,
+              type: true,
+              isGlobal: true,
             },
           },
         },
@@ -145,8 +157,15 @@ export default async function TicketDetailPage({
             status={ticket.status}
             priority={ticket.priority}
             assignedToId={ticket.assignedToId}
+            contractId={ticket.contractId}
             type={ticket.type}
             techs={techs}
+            contracts={ticket.client.contracts.map((c) => ({
+              id: c.id,
+              name: c.name,
+              type: c.type,
+              isGlobal: c.isGlobal,
+            }))}
           />
           <div className="mt-4">
             <TimerControls
@@ -263,6 +282,16 @@ export default async function TicketDetailPage({
               </ol>
             )}
           </div>
+
+          <ChecklistCard
+            ticketId={ticket.id}
+            items={items}
+            initial={
+              Array.isArray(ticket.checklist)
+                ? (ticket.checklist as unknown as ChecklistItem[])
+                : []
+            }
+          />
 
           <QuickCharge ticketId={ticket.id} items={items} />
 

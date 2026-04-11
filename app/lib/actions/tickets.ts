@@ -35,17 +35,30 @@ export async function createTicket(
   const priority = (formData.get('priority') as TH_TicketPriority | null) ?? 'MEDIUM'
   const type = (formData.get('type') as TH_TicketType | null) ?? 'INCIDENT'
   const assignedToId = (formData.get('assignedToId') as string | null) || null
+  const explicitContractId = (formData.get('contractId') as string | null) || null
 
   if (!clientId) return { ok: false, error: 'Client is required' }
   if (!title) return { ok: false, error: 'Title is required' }
 
   try {
-    // Link the ticket to the client's Global Contract by default so the
-    // charge cascade has somewhere to land even if no contract is chosen.
-    const globalContract = await prisma.tH_Contract.findFirst({
-      where: { clientId, isGlobal: true },
-      select: { id: true },
-    })
+    // Contract resolution: honor explicit pick if it belongs to the same
+    // client, otherwise fall back to the client's Global Contract.
+    let contractId: string | null = null
+    if (explicitContractId) {
+      const chosen = await prisma.tH_Contract.findUnique({
+        where: { id: explicitContractId },
+        select: { id: true, clientId: true, status: true },
+      })
+      if (chosen && chosen.clientId === clientId) contractId = chosen.id
+    }
+    if (!contractId) {
+      const globalContract = await prisma.tH_Contract.findFirst({
+        where: { clientId, isGlobal: true },
+        select: { id: true },
+      })
+      contractId = globalContract?.id ?? null
+    }
+    const globalContract = contractId ? { id: contractId } : null
 
     const { slaResponseDue, slaResolveDue } = await computeSlaDates(priority)
 
@@ -248,6 +261,50 @@ export async function assignTicket(
   } catch (e) {
     console.error('[actions/tickets] assign failed', e)
     return { ok: false, error: 'Failed to assign' }
+  }
+}
+
+export async function updateTicketContract(
+  ticketId: string,
+  contractId: string | null,
+): Promise<{ ok: boolean; error?: string }> {
+  const userId = await getUserId()
+  if (!userId) return { ok: false, error: 'Unauthorized' }
+  try {
+    const ticket = await prisma.tH_Ticket.findUnique({
+      where: { id: ticketId },
+      select: { id: true, clientId: true, contractId: true },
+    })
+    if (!ticket) return { ok: false, error: 'Not found' }
+    if (contractId) {
+      const contract = await prisma.tH_Contract.findUnique({
+        where: { id: contractId },
+        select: { clientId: true },
+      })
+      if (!contract || contract.clientId !== ticket.clientId) {
+        return { ok: false, error: 'Contract does not belong to this client' }
+      }
+    }
+    if (ticket.contractId === contractId) return { ok: true }
+    await prisma.$transaction([
+      prisma.tH_Ticket.update({
+        where: { id: ticketId },
+        data: { contractId },
+      }),
+      prisma.tH_TicketEvent.create({
+        data: {
+          ticketId,
+          userId,
+          type: 'CONTRACT_CHANGE',
+          data: { from: ticket.contractId, to: contractId },
+        },
+      }),
+    ])
+    revalidatePath(`/tickets/${ticketId}`)
+    return { ok: true }
+  } catch (e) {
+    console.error('[actions/tickets] updateContract failed', e)
+    return { ok: false, error: 'Failed to update contract' }
   }
 }
 
