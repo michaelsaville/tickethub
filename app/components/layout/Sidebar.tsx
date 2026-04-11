@@ -7,8 +7,8 @@ const PRIMARY_NAV = [
   { href: '/dashboard', label: 'Dashboard', icon: '🏠' },
   { href: '/tickets', label: 'Tickets', icon: '🎫' },
   { href: '/clients', label: 'Clients', icon: '👥' },
+  { href: '/invoices', label: 'Invoices', icon: '🧾' },
   { href: '/assets', label: 'Assets', icon: '💻' },
-  { href: '/time', label: 'Time & Billing', icon: '⏱️' },
   { href: '/reports', label: 'Reports', icon: '📊' },
 ] as const
 
