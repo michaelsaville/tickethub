@@ -1,7 +1,8 @@
 import Link from 'next/link'
 import { notFound, redirect } from 'next/navigation'
 import { prisma } from '@/app/lib/prisma'
-import { requireAuth } from '@/app/lib/api-auth'
+import { requireAuth, hasMinRole } from '@/app/lib/api-auth'
+import { TaxStateSelector } from './TaxStateSelector'
 
 export const dynamic = 'force-dynamic'
 
@@ -10,8 +11,9 @@ export default async function ClientDetailPage({
 }: {
   params: Promise<{ id: string }>
 }) {
-  const { error } = await requireAuth()
+  const { session, error } = await requireAuth()
   if (error) redirect('/api/auth/signin')
+  const canSeeAmounts = hasMinRole(session!.user.role, 'TICKETHUB_ADMIN')
 
   const { id } = await params
   const client = await prisma.tH_Client.findUnique({
@@ -41,6 +43,10 @@ export default async function ClientDetailPage({
 
   if (!client) notFound()
 
+  const billableCount = await prisma.tH_Charge.count({
+    where: { status: 'BILLABLE', contract: { clientId: client.id } },
+  })
+
   return (
     <div className="p-6">
       <header className="mb-6">
@@ -62,6 +68,26 @@ export default async function ClientDetailPage({
           )}
         </div>
       </header>
+
+      <div className="mb-6 flex flex-wrap items-center gap-3">
+        <TaxStateSelector
+          clientId={client.id}
+          initial={client.billingState}
+        />
+        {canSeeAmounts && (
+          <Link
+            href={`/invoices/new?clientId=${client.id}`}
+            className={
+              billableCount > 0 && client.billingState
+                ? 'th-btn-primary'
+                : 'th-btn-secondary cursor-not-allowed opacity-50'
+            }
+            aria-disabled={!(billableCount > 0 && client.billingState)}
+          >
+            + Invoice Client ({billableCount} billable)
+          </Link>
+        )}
+      </div>
 
       {client.internalNotes && (
         <div className="th-card mb-6 border-accent/40 bg-accent/5">

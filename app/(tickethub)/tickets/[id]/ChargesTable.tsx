@@ -3,6 +3,7 @@
 import { useState, useTransition } from 'react'
 import type { TH_ChargeStatus, TH_ChargeType } from '@prisma/client'
 import { updateChargeStatus } from '@/app/lib/actions/charges'
+import { formatCents } from '@/app/lib/billing'
 
 type Charge = {
   id: string
@@ -10,6 +11,8 @@ type Charge = {
   status: TH_ChargeStatus
   description: string | null
   quantity: number
+  unitPrice: number
+  totalPrice: number
   timeChargedMinutes: number | null
   workDate: Date | string
   item: { name: string; code: string | null }
@@ -17,11 +20,17 @@ type Charge = {
 }
 
 /**
- * Finance-blind by default — techs see what work was logged and its billing
- * status, but not unit prices or totals. When we add a TICKETHUB_ADMIN view
- * with finance visibility, this component will accept a showAmounts prop.
+ * Finance-blind for techs — they see what was logged and its billing status
+ * but no prices. Admins (TICKETHUB_ADMIN+) see rate and line total via
+ * `showAmounts`. A running subtotal is shown only when amounts are visible.
  */
-export function ChargesTable({ charges }: { charges: Charge[] }) {
+export function ChargesTable({
+  charges,
+  showAmounts,
+}: {
+  charges: Charge[]
+  showAmounts: boolean
+}) {
   if (charges.length === 0) {
     return (
       <div className="th-card">
@@ -36,21 +45,45 @@ export function ChargesTable({ charges }: { charges: Charge[] }) {
     )
   }
 
+  const totals = charges.reduce(
+    (acc, c) => {
+      if (c.status === 'BILLABLE' || c.status === 'INVOICED' || c.status === 'LOCKED') {
+        acc.billable += c.totalPrice
+      }
+      acc.all += c.totalPrice
+      return acc
+    },
+    { billable: 0, all: 0 },
+  )
+
   return (
     <div className="th-card">
-      <div className="mb-3 font-mono text-[10px] uppercase tracking-wider text-th-text-muted">
-        Charges ({charges.length})
+      <div className="mb-3 flex items-baseline justify-between">
+        <div className="font-mono text-[10px] uppercase tracking-wider text-th-text-muted">
+          Charges ({charges.length})
+        </div>
+        {showAmounts && (
+          <div className="font-mono text-xs text-th-text-secondary">
+            billable <span className="text-slate-100">{formatCents(totals.billable)}</span>
+          </div>
+        )}
       </div>
       <ul className="divide-y divide-th-border">
         {charges.map((c) => (
-          <ChargeRow key={c.id} charge={c} />
+          <ChargeRow key={c.id} charge={c} showAmounts={showAmounts} />
         ))}
       </ul>
     </div>
   )
 }
 
-function ChargeRow({ charge }: { charge: Charge }) {
+function ChargeRow({
+  charge,
+  showAmounts,
+}: {
+  charge: Charge
+  showAmounts: boolean
+}) {
   const [status, setStatus] = useState(charge.status)
   const [err, setErr] = useState<string | null>(null)
   const [isPending, startTransition] = useTransition()
@@ -104,6 +137,16 @@ function ChargeRow({ charge }: { charge: Charge }) {
         </div>
         {err && <div className="text-xs text-priority-urgent">{err}</div>}
       </div>
+      {showAmounts && (
+        <div className="text-right font-mono text-xs">
+          <div className="text-th-text-muted">
+            @ {formatCents(charge.unitPrice)}
+          </div>
+          <div className="text-slate-100">
+            {formatCents(charge.totalPrice)}
+          </div>
+        </div>
+      )}
       <button
         type="button"
         onClick={toggle}

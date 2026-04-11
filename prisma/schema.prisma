@@ -24,6 +24,10 @@ model TH_Client {
   name          String
   shortCode     String?  @unique
   internalNotes String?
+  /// ISO 3166-2 US state code (WV/MD/PA/…) — determines sales tax rate
+  /// at invoice time. Frozen onto TH_Invoice.taxState at invoice creation
+  /// so historical invoices survive rate changes.
+  billingState  String?
   isActive      Boolean  @default(true)
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
@@ -439,9 +443,12 @@ model TH_Invoice {
   issueDate DateTime         @default(now())
   dueDate   DateTime?
 
-  subtotal    Int
-  taxAmount   Int @default(0)
-  totalAmount Int
+  subtotal        Int
+  taxableSubtotal Int     @default(0) // cents — portion of subtotal that was taxed
+  taxState        String?              // frozen from client.billingState
+  taxRate         Int     @default(0)  // basis points (600 = 6.00%)
+  taxAmount       Int     @default(0)
+  totalAmount     Int
 
   notes String?
 

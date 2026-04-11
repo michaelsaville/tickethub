@@ -1,7 +1,7 @@
 import Link from 'next/link'
 import { notFound, redirect } from 'next/navigation'
 import { prisma } from '@/app/lib/prisma'
-import { requireAuth } from '@/app/lib/api-auth'
+import { requireAuth, hasMinRole } from '@/app/lib/api-auth'
 import { SlaBadge } from '@/app/components/SlaBadge'
 import { TicketProperties } from './TicketProperties'
 import { CommentComposer } from './CommentComposer'
@@ -16,8 +16,9 @@ export default async function TicketDetailPage({
 }: {
   params: Promise<{ id: string }>
 }) {
-  const { error } = await requireAuth()
+  const { session, error } = await requireAuth()
   if (error) redirect('/api/auth/signin')
+  const canSeeAmounts = hasMinRole(session!.user.role, 'TICKETHUB_ADMIN')
 
   const { id } = await params
   const ticket = await prisma.tH_Ticket.findUnique({
@@ -234,7 +235,7 @@ export default async function TicketDetailPage({
 
           <QuickCharge ticketId={ticket.id} items={items} />
 
-          <ChargesTable charges={ticket.charges} />
+          <ChargesTable charges={ticket.charges} showAmounts={canSeeAmounts} />
 
           <Attachments
             ticketId={ticket.id}
