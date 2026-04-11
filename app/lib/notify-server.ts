@@ -1,6 +1,10 @@
 import 'server-only'
 import { prisma } from '@/app/lib/prisma'
-import { notify, type NotificationPriority } from '@/app/lib/notifications'
+import { notify, sendNtfy, type NotificationPriority } from '@/app/lib/notifications'
+
+/** Shared team topic — used when a user hasn't set a personal topic and
+ *  for team-wide broadcasts (new high-priority tickets, SLA alerts). */
+export const SHARED_TOPIC = process.env.NTFY_SHARED_TOPIC ?? 'tickethub'
 
 /**
  * Mode-aware per-user notification dispatch. Filters by the user's
@@ -65,7 +69,7 @@ export async function notifyUser(
     const topic =
       user.ntfyTopic && user.ntfyTopic.trim()
         ? user.ntfyTopic.trim()
-        : `tickethub-${user.id}`
+        : SHARED_TOPIC
 
     await notify({
       title: opts.title,
@@ -80,27 +84,32 @@ export async function notifyUser(
   }
 }
 
-/** Dispatch to every admin (GLOBAL_ADMIN / TICKETHUB_ADMIN). */
-export async function notifyAdmins(opts: {
+/**
+ * Team-wide broadcast to the shared ntfy topic. Used for events that
+ * matter to anyone on call — new urgent tickets, SLA alerts, etc.
+ * A single POST regardless of how many admins exist.
+ */
+export async function notifyTeam(opts: {
   title: string
   body: string
   url?: string
   priority?: NotificationPriority
-  category?: 'ASSIGNED' | 'COMMENT' | 'SLA' | 'NEW_HIGH' | 'INFO' | 'TEST'
 }): Promise<void> {
   try {
-    const admins = await prisma.tH_User.findMany({
-      where: {
-        isActive: true,
-        role: { in: ['GLOBAL_ADMIN', 'TICKETHUB_ADMIN'] },
-      },
-      select: { id: true },
+    await sendNtfy({
+      title: opts.title,
+      body: opts.body,
+      url: opts.url,
+      priority: opts.priority ?? 'normal',
+      ntfyTopic: SHARED_TOPIC,
     })
-    await Promise.all(admins.map((a) => notifyUser(a.id, opts)))
   } catch (e) {
-    console.error('[notify-server] notifyAdmins failed', e)
+    console.error('[notify-server] notifyTeam failed', e)
   }
 }
+
+/** Back-compat alias — admin fan-out now goes to the shared topic. */
+export const notifyAdmins = notifyTeam
 
 export function ticketUrl(ticketId: string): string {
   const base = process.env.NEXTAUTH_URL ?? 'https://tickethub.pcc2k.com'

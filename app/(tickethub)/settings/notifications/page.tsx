@@ -25,7 +25,7 @@ export default async function NotificationSettingsPage() {
 
   const ntfyUrl = process.env.NTFY_URL ?? ''
   const pushoverConfigured = Boolean(process.env.PUSHOVER_APP_TOKEN)
-  const defaultTopic = `tickethub-${user.id}`
+  const defaultTopic = process.env.NTFY_SHARED_TOPIC ?? 'tickethub'
 
   return (
     <div className="p-6">

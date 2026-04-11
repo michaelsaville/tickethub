@@ -110,8 +110,10 @@ export function NotificationPrefsForm({
           className="th-input font-mono"
         />
         <p className="mt-1 text-xs text-th-text-muted">
-          Leave blank to use the default <span className="font-mono">{defaultTopic}</span>.
-          Subscribe to this topic in the ntfy mobile app.
+          Leave blank to use the shared team topic{' '}
+          <span className="font-mono">{defaultTopic}</span> — everyone on the
+          team gets the same broadcasts. Set a custom topic only if you want
+          your own private channel.
         </p>
         {ntfyShareUrl && (
           <p className="mt-2 text-xs">
