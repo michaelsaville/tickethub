@@ -38,6 +38,11 @@ const GROUPS = [
         title: 'My Notifications',
         description: 'ntfy topic, Pushover key, on-call mode',
       },
+      {
+        href: '/settings/vault',
+        title: 'Password Vault Shortcut',
+        description: 'Show or hide the DocHub vault link in the sidebar',
+      },
     ],
   },
 ] as const

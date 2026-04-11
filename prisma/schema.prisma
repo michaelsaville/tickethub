@@ -32,6 +32,10 @@ model TH_Client {
   /// email when set. Useful when a client has an ap@ / billing@ mailbox
   /// separate from the person you talk to day to day.
   billingEmail  String?
+  /// Per-client opt-out for automated ticket emails (new ticket opened,
+  /// public reply added). Master kill switch is `TICKETHUB_CLIENT_EMAILS_ENABLED`
+  /// env var — this flag only matters when the env is ON.
+  emailClientOnTicketEvents Boolean @default(true)
   isActive      Boolean  @default(true)
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
@@ -221,6 +225,7 @@ model TH_Charge {
   isBillable Boolean  @default(true)
 
   externalRef String?
+  clientOpId  String? @unique
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -331,6 +336,7 @@ model TH_TicketComment {
   author     TH_User   @relation(fields: [authorId], references: [id])
   body       String
   isInternal Boolean   @default(false)
+  clientOpId String?   @unique
   createdAt  DateTime  @default(now())
   updatedAt  DateTime  @updatedAt
 
@@ -552,6 +558,14 @@ model TH_User {
   /// OFF_DUTY (critical only — Pushover)
   notificationMode String @default("WORKING")
 
+  /// Email addresses this tech owns — mail from any of these lands in
+  /// the Inbox dashboard as a forwarder candidate (never auto-creates).
+  inboundForwardEmails String[] @default([])
+
+  /// Whether to show the cross-app shortcut to the DocHub personal
+  /// password vault in the TicketHub sidebar. Per-user opt-out.
+  showVaultLink Boolean @default(true)
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
@@ -563,8 +577,94 @@ model TH_User {
   fuelReceipts    TH_FuelReceipt[]
   ticketEvents    TH_TicketEvent[]
   parts           TH_TicketPart[]
+  forwardedInboundEmails TH_PendingInboundEmail[] @relation("ForwardedInboundEmails")
 
   @@map("th_users")
+  @@schema("tickethub")
+}
+
+// ─── INBOUND EMAIL INBOX ──────────────────────────────────────────────────
+
+enum TH_PendingInboundEmailStatus {
+  PENDING
+  APPROVED
+  DISMISSED
+
+  @@schema("tickethub")
+}
+
+/// Inbound emails that didn't get auto-matched into an existing ticket
+/// or auto-created via a known contact. Shows up on /inbox for manual
+/// triage. Populated by the M365 Graph webhook.
+model TH_PendingInboundEmail {
+  id               String                       @id @default(cuid())
+  graphMessageId   String                       @unique
+  fromEmail        String
+  fromName         String?
+  subject          String
+  bodyText         String
+  bodyHtml         String?
+  snippet          String
+  receivedAt       DateTime
+  status           TH_PendingInboundEmailStatus @default(PENDING)
+  /// If this email is a "forwarded by a tech" candidate, the user
+  /// who forwarded it. The dashboard shows a badge and the
+  /// create-ticket modal pre-fills assignee to this user.
+  forwardedByUserId String?
+  forwardedBy      TH_User?                     @relation("ForwardedInboundEmails", fields: [forwardedByUserId], references: [id])
+  /// Rolling "plus N more" counter — additional emails from the same
+  /// sender within the rate-limit window append into this row instead
+  /// of creating new ones.
+  additionalCount  Int                          @default(0)
+  /// After approval, the ticket that was created (audit trail).
+  matchedTicketId  String?
+  handledById      String?
+  handledAt        DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([status, receivedAt])
+  @@index([fromEmail])
+  @@map("th_pending_inbound_emails")
+  @@schema("tickethub")
+}
+
+/// Audit trail for outbound ticket-related emails sent to clients
+/// (new ticket opened, public reply added). Used for:
+///   1. Debugging ("did we email them?" without grepping logs)
+///   2. Rate limiting (skip if we just sent them one)
+///   3. Loop prevention (see the ignoreUntil field)
+model TH_TicketEmailOutbound {
+  id             String   @id @default(cuid())
+  ticketId       String
+  mode           String   // 'NEW_TICKET' | 'STAFF_REPLY'
+  toEmail        String
+  subject        String
+  sentAt         DateTime @default(now())
+  /// Drop inbound mail from toEmail for this long after an outbound —
+  /// blocks vacation responder loops. Inbox pipeline checks this.
+  ignoreUntil    DateTime?
+
+  @@index([ticketId, sentAt])
+  @@index([toEmail, sentAt])
+  @@map("th_ticket_email_outbound")
+  @@schema("tickethub")
+}
+
+/// Senders (email OR domain) that should never make it to the inbox.
+/// Checked at webhook ingest time — matches bypass the pipeline.
+model TH_BlockedSender {
+  id          String   @id @default(cuid())
+  /// Full address OR bare domain (e.g. "joe@acme.com" or "acme.com")
+  value       String   @unique
+  /// "EMAIL" | "DOMAIN"
+  kind        String
+  reason      String?
+  createdById String?
+  createdAt   DateTime @default(now())
+
+  @@map("th_blocked_senders")
   @@schema("tickethub")
 }
 

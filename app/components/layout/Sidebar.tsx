@@ -5,6 +5,7 @@ import { usePathname } from 'next/navigation'
 
 const PRIMARY_NAV = [
   { href: '/dashboard', label: 'Dashboard', icon: '🏠' },
+  { href: '/inbox', label: 'Inbox', icon: '📥' },
   { href: '/tickets', label: 'Tickets', icon: '🎫' },
   { href: '/clients', label: 'Clients', icon: '👥' },
   { href: '/invoices', label: 'Invoices', icon: '🧾' },
@@ -25,6 +26,10 @@ const SECONDARY_NAV = [
   { href: '/fuel-receipts', label: 'Fuel Receipts', icon: '⛽' },
 ] as const
 
+const DOCHUB_VAULT_URL =
+  (process.env.NEXT_PUBLIC_DOCHUB_URL || 'https://dochub.pcc2k.com') +
+  '/settings?section=my-vault'
+
 const FOOTER_NAV = [
   { href: '/settings', label: 'Settings', icon: '⚙️' },
   { href: '/profile', label: 'Profile', icon: '👤' },
@@ -33,7 +38,7 @@ const FOOTER_NAV = [
 const DOCHUB_URL =
   process.env.NEXT_PUBLIC_DOCHUB_URL || 'https://dochub.yourdomain.com'
 
-export function Sidebar() {
+export function Sidebar({ showVaultLink = false }: { showVaultLink?: boolean }) {
   const pathname = usePathname()
 
   return (
@@ -61,6 +66,23 @@ export function Sidebar() {
 
         <div className="mt-6 border-t border-th-border pt-4">
           <NavGroup items={SECONDARY_NAV} pathname={pathname} />
+          {showVaultLink && (
+            <ul className="mt-0.5 space-y-0.5">
+              <li>
+                <a
+                  href={DOCHUB_VAULT_URL}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="flex items-center gap-3 rounded-md px-3 py-2 text-sm text-slate-300 hover:bg-th-elevated hover:text-slate-100"
+                  title="Opens DocHub personal password vault in a new tab"
+                >
+                  <span aria-hidden className="text-base leading-none">🔐</span>
+                  <span>Password Vault</span>
+                  <span aria-hidden className="ml-auto text-xs text-th-text-muted">↗</span>
+                </a>
+              </li>
+            </ul>
+          )}
         </div>
       </nav>
 
