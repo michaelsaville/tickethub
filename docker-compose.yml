@@ -27,9 +27,24 @@ services:
     networks:
       - dochub_default
 
+  ntfy:
+    image: binwiederhier/ntfy:latest
+    container_name: tickethub-ntfy
+    restart: unless-stopped
+    command: serve
+    ports:
+      # Host port 8090 → container 80. nginx reverse-proxies to :8090.
+      - "8090:80"
+    volumes:
+      - ./ntfy/server.yml:/etc/ntfy/server.yml:ro
+      - ntfy_cache:/var/cache/ntfy
+    networks:
+      - dochub_default
+
 networks:
   dochub_default:
     external: true
 
 volumes:
   tickethub_uploads:
+  ntfy_cache:

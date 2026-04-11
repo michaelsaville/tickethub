@@ -1,0 +1,10 @@
+# TicketHub ntfy config — see https://docs.ntfy.sh/config/
+base-url: "https://ntfy.pcc2k.com"
+listen-http: ":80"
+cache-file: "/var/cache/ntfy/cache.db"
+cache-duration: "24h"
+# Behind nginx — trust X-Forwarded-* headers
+behind-proxy: true
+# Attachments are off for now; we only push text
+attachment-cache-dir: ""
+attachment-total-size-limit: "0"
