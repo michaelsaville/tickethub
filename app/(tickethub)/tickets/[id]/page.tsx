@@ -11,6 +11,7 @@ import { ChargesTable } from './ChargesTable'
 import { TimerControls } from './TimerControls'
 import { PartsCard } from './PartsCard'
 import { ChecklistCard } from './ChecklistCard'
+import { SignatureCard } from './SignatureCard'
 import type { ChecklistItem } from '@/app/lib/actions/checklist'
 import { getMyTimer } from '@/app/lib/actions/timer'
 
@@ -67,6 +68,7 @@ export default async function TicketDetailPage({
       createdBy: { select: { id: true, name: true } },
       attachments: { orderBy: { createdAt: 'desc' } },
       parts: { orderBy: { createdAt: 'desc' } },
+      signatures: { orderBy: { createdAt: 'desc' } },
       charges: {
         orderBy: { workDate: 'desc' },
         include: {
@@ -323,6 +325,15 @@ export default async function TicketDetailPage({
               mimeType: a.mimeType,
               sizeBytes: a.sizeBytes,
               createdAt: a.createdAt,
+            }))}
+          />
+
+          <SignatureCard
+            ticketId={ticket.id}
+            initial={ticket.signatures.map((s) => ({
+              id: s.id,
+              signedByName: s.signedByName,
+              createdAt: s.createdAt,
             }))}
           />
 

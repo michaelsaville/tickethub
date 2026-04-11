@@ -2,12 +2,17 @@
 
 import { useState, useTransition } from 'react'
 import { addComment } from '@/app/lib/actions/tickets'
+import { useVoiceInput } from '@/app/hooks/useVoiceInput'
 
 export function CommentComposer({ ticketId }: { ticketId: string }) {
   const [body, setBody] = useState('')
   const [isInternal, setIsInternal] = useState(false)
   const [err, setErr] = useState<string | null>(null)
   const [isPending, startTransition] = useTransition()
+
+  const voice = useVoiceInput((chunk) => {
+    setBody((prev) => (prev ? `${prev} ${chunk}` : chunk))
+  })
 
   function submit() {
     if (!body.trim()) return
@@ -47,6 +52,22 @@ export function CommentComposer({ ticketId }: { ticketId: string }) {
         >
           Internal Note
         </button>
+        <div className="ml-auto">
+          {voice.supported && (
+            <button
+              type="button"
+              onClick={voice.toggle}
+              className={
+                voice.listening
+                  ? 'rounded-full bg-priority-urgent/20 px-3 py-1 text-xs text-priority-urgent animate-pulse'
+                  : 'rounded-full border border-th-border px-3 py-1 text-xs text-th-text-secondary hover:border-accent/40 hover:text-accent'
+              }
+              title={voice.listening ? 'Stop dictation' : 'Dictate with voice'}
+            >
+              🎙 {voice.listening ? 'Listening…' : 'Dictate'}
+            </button>
+          )}
+        </div>
       </div>
       <textarea
         value={body}

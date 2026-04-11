@@ -289,10 +289,14 @@ model TH_Ticket {
   type        TH_TicketType     @default(INCIDENT)
   board       String?
 
-  slaResponseDue DateTime?
-  slaResolveDue  DateTime?
-  slaBreached    Boolean   @default(false)
-  slaPausedAt    DateTime?
+  slaResponseDue      DateTime?
+  slaResolveDue       DateTime?
+  slaBreached         Boolean   @default(false)
+  slaPausedAt         DateTime?
+  /// Highest SLA elapsed threshold already notified on, in percent
+  /// (0 = none, 50 = gentle, 75 = urgent, 90 = critical, 100 = breached).
+  /// Ensures the escalation cron only fires once per threshold per ticket.
+  slaLastNotifiedBps  Int       @default(0)
 
   isUnread        Boolean   @default(false)
   lastClientReply DateTime?

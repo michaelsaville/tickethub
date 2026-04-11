@@ -82,15 +82,28 @@ export function Attachments({
         <div className="font-mono text-[10px] uppercase tracking-wider text-th-text-muted">
           Attachments ({items.length})
         </div>
-        <label className="th-btn-secondary cursor-pointer text-xs">
-          {uploading ? 'Uploading…' : '+ Upload'}
-          <input
-            type="file"
-            onChange={handleUpload}
-            disabled={uploading}
-            className="hidden"
-          />
-        </label>
+        <div className="flex items-center gap-2">
+          <label className="th-btn-secondary cursor-pointer text-xs">
+            {uploading ? 'Uploading…' : '📷 Photo'}
+            <input
+              type="file"
+              accept="image/*"
+              capture="environment"
+              onChange={handleUpload}
+              disabled={uploading}
+              className="hidden"
+            />
+          </label>
+          <label className="th-btn-secondary cursor-pointer text-xs">
+            + Upload
+            <input
+              type="file"
+              onChange={handleUpload}
+              disabled={uploading}
+              className="hidden"
+            />
+          </label>
+        </div>
       </div>
 
       {err && (

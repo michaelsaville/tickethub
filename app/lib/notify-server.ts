@@ -94,6 +94,8 @@ export async function notifyTeam(opts: {
   body: string
   url?: string
   priority?: NotificationPriority
+  /** Accepted for signature parity with notifyUser; ignored at dispatch. */
+  category?: 'ASSIGNED' | 'COMMENT' | 'SLA' | 'NEW_HIGH' | 'INFO' | 'TEST'
 }): Promise<void> {
   try {
     await sendNtfy({
