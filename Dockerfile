@@ -29,6 +29,11 @@ COPY --from=builder /app/public ./public
 RUN mkdir .next
 RUN chown nextjs:nodejs .next
 
+# Pre-create /uploads with the runtime user's ownership. When Docker mounts
+# an empty named volume here for the first time it inherits these perms;
+# otherwise the app hits EACCES trying to mkdir its ticket subdirectories.
+RUN mkdir -p /uploads && chown nextjs:nodejs /uploads
+
 COPY --from=builder --chown=nextjs:nodejs /app/.next/standalone ./
 COPY --from=builder --chown=nextjs:nodejs /app/.next/static ./.next/static
 

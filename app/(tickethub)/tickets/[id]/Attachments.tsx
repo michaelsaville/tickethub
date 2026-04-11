@@ -36,6 +36,16 @@ export function Attachments({
         method: 'POST',
         body: fd,
       })
+      const ct = res.headers.get('content-type') ?? ''
+      if (!ct.includes('application/json')) {
+        // nginx 413, proxy error, etc. — response body is HTML/text.
+        if (res.status === 413) {
+          setErr('File too large for the server (nginx 1MB limit?)')
+        } else {
+          setErr(`Upload failed: HTTP ${res.status}`)
+        }
+        return
+      }
       const json = await res.json()
       if (!res.ok || json.error) {
         setErr(json.error ?? `Upload failed (${res.status})`)
