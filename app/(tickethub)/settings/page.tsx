@@ -13,6 +13,11 @@ const GROUPS = [
         title: 'SLA Policies',
         description: 'Response and resolve targets per priority',
       },
+      {
+        href: '/settings/items',
+        title: 'Item Catalog',
+        description: 'Labor rates, parts, and expense items',
+      },
     ],
   },
   {

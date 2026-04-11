@@ -6,6 +6,8 @@ import { SlaBadge } from '@/app/components/SlaBadge'
 import { TicketProperties } from './TicketProperties'
 import { CommentComposer } from './CommentComposer'
 import { Attachments } from './Attachments'
+import { QuickCharge } from './QuickCharge'
+import { ChargesTable } from './ChargesTable'
 
 export const dynamic = 'force-dynamic'
 
@@ -48,6 +50,13 @@ export default async function TicketDetailPage({
       assignedTo: { select: { id: true, name: true, email: true } },
       createdBy: { select: { id: true, name: true } },
       attachments: { orderBy: { createdAt: 'desc' } },
+      charges: {
+        orderBy: { workDate: 'desc' },
+        include: {
+          item: { select: { name: true, code: true } },
+          technician: { select: { name: true } },
+        },
+      },
       comments: {
         orderBy: { createdAt: 'asc' },
         include: { author: { select: { id: true, name: true } } },
@@ -68,11 +77,18 @@ export default async function TicketDetailPage({
     })
   }
 
-  const techs = await prisma.tH_User.findMany({
-    where: { isActive: true },
-    orderBy: { name: 'asc' },
-    select: { id: true, name: true },
-  })
+  const [techs, items] = await Promise.all([
+    prisma.tH_User.findMany({
+      where: { isActive: true },
+      orderBy: { name: 'asc' },
+      select: { id: true, name: true },
+    }),
+    prisma.tH_Item.findMany({
+      where: { isActive: true },
+      orderBy: [{ type: 'asc' }, { name: 'asc' }],
+      select: { id: true, name: true, type: true, code: true },
+    }),
+  ])
 
   type TimelineEntry =
     | { kind: 'comment'; at: Date; data: (typeof ticket.comments)[number] }
@@ -215,6 +231,10 @@ export default async function TicketDetailPage({
               </ol>
             )}
           </div>
+
+          <QuickCharge ticketId={ticket.id} items={items} />
+
+          <ChargesTable charges={ticket.charges} />
 
           <Attachments
             ticketId={ticket.id}
