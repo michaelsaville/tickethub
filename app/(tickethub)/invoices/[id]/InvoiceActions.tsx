@@ -8,19 +8,27 @@ import {
   reopenInvoice,
   updateInvoiceStatus,
 } from '@/app/lib/actions/invoices'
+import { SendInvoiceDialog } from './SendInvoiceDialog'
 
 export function InvoiceActions({
   invoiceId,
   status,
   isAdmin,
+  emailConfigured,
+  defaultTo,
+  defaultSubject,
 }: {
   invoiceId: string
   status: TH_InvoiceStatus
   isAdmin: boolean
+  emailConfigured: boolean
+  defaultTo: string
+  defaultSubject: string
 }) {
   const router = useRouter()
   const [err, setErr] = useState<string | null>(null)
   const [isPending, startTransition] = useTransition()
+  const [showSend, setShowSend] = useState(false)
 
   function transition(next: TH_InvoiceStatus) {
     setErr(null)
@@ -62,11 +70,23 @@ export function InvoiceActions({
         <StatusBadge status={status} />
         {status === 'DRAFT' && (
           <>
+            {emailConfigured && isAdmin && (
+              <button
+                type="button"
+                onClick={() => setShowSend(true)}
+                disabled={isPending}
+                className="th-btn-primary text-xs"
+                title="Email PDF to client and transition to SENT"
+              >
+                📧 Email to Client
+              </button>
+            )}
             <button
               type="button"
               onClick={() => transition('SENT')}
               disabled={isPending}
-              className="th-btn-primary text-xs"
+              className="th-btn-secondary text-xs"
+              title="Mark SENT without emailing"
             >
               Mark Sent
             </button>
@@ -106,6 +126,14 @@ export function InvoiceActions({
         <div className="rounded-md border border-priority-urgent/40 bg-priority-urgent/10 px-3 py-1.5 text-xs text-priority-urgent">
           {err}
         </div>
+      )}
+      {showSend && (
+        <SendInvoiceDialog
+          invoiceId={invoiceId}
+          defaultTo={defaultTo}
+          defaultSubject={defaultSubject}
+          onClose={() => setShowSend(false)}
+        />
       )}
     </div>
   )

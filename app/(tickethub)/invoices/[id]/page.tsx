@@ -4,6 +4,8 @@ import { prisma } from '@/app/lib/prisma'
 import { requireAuth, hasMinRole } from '@/app/lib/api-auth'
 import { formatCents } from '@/app/lib/billing'
 import { formatRate } from '@/app/lib/tax'
+import { m365Configured } from '@/app/lib/m365'
+import { ORG } from '@/app/lib/org'
 import { InvoiceActions } from './InvoiceActions'
 
 export const dynamic = 'force-dynamic'
@@ -21,7 +23,15 @@ export default async function InvoiceDetailPage({
   const invoice = await prisma.tH_Invoice.findUnique({
     where: { id },
     include: {
-      client: true,
+      client: {
+        include: {
+          contacts: {
+            where: { isActive: true, email: { not: null } },
+            orderBy: [{ isPrimary: 'desc' }, { lastName: 'asc' }],
+            take: 1,
+          },
+        },
+      },
       charges: {
         include: {
           item: { select: { name: true, code: true, taxable: true } },
@@ -33,6 +43,10 @@ export default async function InvoiceDetailPage({
     },
   })
   if (!invoice) notFound()
+
+  const defaultTo = invoice.client.contacts[0]?.email ?? ''
+  const defaultSubject = `Invoice #${invoice.invoiceNumber} from ${ORG.name}`
+  const emailConfigured = m365Configured()
 
   return (
     <div className="p-6">
@@ -81,6 +95,9 @@ export default async function InvoiceDetailPage({
             invoiceId={invoice.id}
             status={invoice.status}
             isAdmin={isAdmin}
+            emailConfigured={emailConfigured}
+            defaultTo={defaultTo}
+            defaultSubject={defaultSubject}
           />
         </div>
       </header>
