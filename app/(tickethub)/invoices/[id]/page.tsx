@@ -60,11 +60,29 @@ export default async function InvoiceDetailPage({
             {invoice.taxState && ` · ${invoice.taxState} ${formatRate(invoice.taxRate)}`}
           </p>
         </div>
-        <InvoiceActions
-          invoiceId={invoice.id}
-          status={invoice.status}
-          isAdmin={isAdmin}
-        />
+        <div className="flex flex-col items-end gap-2">
+          <div className="flex items-center gap-2">
+            <a
+              href={`/api/invoices/${invoice.id}/pdf`}
+              target="_blank"
+              rel="noreferrer"
+              className="th-btn-secondary text-xs"
+            >
+              View PDF
+            </a>
+            <a
+              href={`/api/invoices/${invoice.id}/pdf?download=1`}
+              className="th-btn-secondary text-xs"
+            >
+              Download
+            </a>
+          </div>
+          <InvoiceActions
+            invoiceId={invoice.id}
+            status={invoice.status}
+            isAdmin={isAdmin}
+          />
+        </div>
       </header>
 
       <div className="grid gap-6 lg:grid-cols-[1fr,320px]">
