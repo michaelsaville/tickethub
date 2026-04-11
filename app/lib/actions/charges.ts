@@ -42,6 +42,7 @@ export async function createCharge(
           id: true,
           clientId: true,
           contractId: true,
+          contract: { select: { id: true, type: true } },
           status: true,
         },
       }),
@@ -104,6 +105,16 @@ export async function createCharge(
     })
     const totalPrice = Math.round(quantity * unitPrice)
 
+    // Look up the contract type — if we fell back to the Global Contract
+    // above, ticket.contract.type is stale. Re-fetch by id.
+    const resolvedContract =
+      ticket.contract && ticket.contractId === contractId
+        ? ticket.contract
+        : await prisma.tH_Contract.findUnique({
+            where: { id: contractId },
+            select: { type: true },
+          })
+
     await prisma.$transaction(async (tx) => {
       const charge = await tx.tH_Charge.create({
         data: {
@@ -121,6 +132,17 @@ export async function createCharge(
           totalPrice,
         },
       })
+      // Block-hours auto-increment: if a LABOR charge lands on a
+      // BLOCK_HOURS contract, add the hours to contract.blockHoursUsed.
+      if (
+        chargeType === 'LABOR' &&
+        resolvedContract?.type === 'BLOCK_HOURS'
+      ) {
+        await tx.tH_Contract.update({
+          where: { id: contractId },
+          data: { blockHoursUsed: { increment: quantity } },
+        })
+      }
       await tx.tH_TicketEvent.create({
         data: {
           ticketId,
@@ -156,7 +178,15 @@ export async function updateChargeStatus(
   try {
     const current = await prisma.tH_Charge.findUnique({
       where: { id: chargeId },
-      select: { id: true, status: true, ticketId: true },
+      select: {
+        id: true,
+        status: true,
+        ticketId: true,
+        contractId: true,
+        type: true,
+        quantity: true,
+        contract: { select: { type: true } },
+      },
     })
     if (!current) return { ok: false, error: 'Charge not found' }
     if (current.status === 'INVOICED' || current.status === 'LOCKED') {
@@ -166,14 +196,31 @@ export async function updateChargeStatus(
       return { ok: false, error: 'Use the invoice wizard' }
     }
 
+    // Delta against block-hours balance when toggling billable state.
+    // Only applies to LABOR on a BLOCK_HOURS contract.
+    const isBlockLabor =
+      current.type === 'LABOR' && current.contract?.type === 'BLOCK_HOURS'
+    const wasBillable = current.status === 'BILLABLE'
+    const willBeBillable = status === 'BILLABLE'
+    let blockHoursDelta = 0
+    if (isBlockLabor && wasBillable !== willBeBillable) {
+      blockHoursDelta = willBeBillable ? current.quantity : -current.quantity
+    }
+
     await prisma.$transaction(async (tx) => {
       await tx.tH_Charge.update({
         where: { id: chargeId },
         data: {
           status,
-          isBillable: status === 'BILLABLE',
+          isBillable: willBeBillable,
         },
       })
+      if (blockHoursDelta !== 0) {
+        await tx.tH_Contract.update({
+          where: { id: current.contractId },
+          data: { blockHoursUsed: { increment: blockHoursDelta } },
+        })
+      }
       if (current.ticketId) {
         await tx.tH_TicketEvent.create({
           data: {

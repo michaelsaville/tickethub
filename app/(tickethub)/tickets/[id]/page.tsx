@@ -9,6 +9,7 @@ import { Attachments } from './Attachments'
 import { QuickCharge } from './QuickCharge'
 import { ChargesTable } from './ChargesTable'
 import { TimerControls } from './TimerControls'
+import { PartsCard } from './PartsCard'
 import { getMyTimer } from '@/app/lib/actions/timer'
 
 export const dynamic = 'force-dynamic'
@@ -53,6 +54,7 @@ export default async function TicketDetailPage({
       assignedTo: { select: { id: true, name: true, email: true } },
       createdBy: { select: { id: true, name: true } },
       attachments: { orderBy: { createdAt: 'desc' } },
+      parts: { orderBy: { createdAt: 'desc' } },
       charges: {
         orderBy: { workDate: 'desc' },
         include: {
@@ -179,6 +181,13 @@ export default async function TicketDetailPage({
                 <dt className="font-mono text-[10px] uppercase tracking-wider text-th-text-muted">
                   Contract
                 </dt>
+                {ticket.contract.type === 'BLOCK_HOURS' &&
+                  ticket.contract.blockHours != null && (
+                    <dd className="mt-1 font-mono text-xs text-slate-300">
+                      {ticket.contract.blockHoursUsed.toFixed(1)} /{' '}
+                      {ticket.contract.blockHours.toFixed(1)} hrs used
+                    </dd>
+                  )}
                 <dd className="mt-1 text-slate-200">
                   {ticket.contract.name}
                   <span className="ml-2 text-th-text-muted">
@@ -256,6 +265,24 @@ export default async function TicketDetailPage({
           </div>
 
           <QuickCharge ticketId={ticket.id} items={items} />
+
+          <PartsCard
+            ticketId={ticket.id}
+            items={items}
+            initial={ticket.parts.map((p) => ({
+              id: p.id,
+              name: p.name,
+              quantity: p.quantity,
+              unitCost: p.unitCost,
+              unitPrice: p.unitPrice,
+              vendor: p.vendor,
+              vendorUrl: p.vendorUrl,
+              orderNumber: p.orderNumber,
+              status: p.status,
+              chargeId: p.chargeId,
+            }))}
+            showAmounts={canSeeAmounts}
+          />
 
           <ChargesTable charges={ticket.charges} showAmounts={canSeeAmounts} />
 
