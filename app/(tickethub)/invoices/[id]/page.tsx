@@ -44,7 +44,8 @@ export default async function InvoiceDetailPage({
   })
   if (!invoice) notFound()
 
-  const defaultTo = invoice.client.contacts[0]?.email ?? ''
+  const defaultTo =
+    invoice.client.billingEmail ?? invoice.client.contacts[0]?.email ?? ''
   const defaultSubject = `Invoice #${invoice.invoiceNumber} from ${ORG.name}`
   const emailConfigured = m365Configured()
 

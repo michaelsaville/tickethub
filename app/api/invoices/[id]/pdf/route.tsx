@@ -1,8 +1,13 @@
+import type { ReactElement } from 'react'
 import { NextResponse, type NextRequest } from 'next/server'
-import { renderToBuffer } from '@react-pdf/renderer'
+import { renderToBuffer, type DocumentProps } from '@react-pdf/renderer'
 import { prisma } from '@/app/lib/prisma'
 import { requireAuth } from '@/app/lib/api-auth'
 import { InvoicePdf, type InvoicePdfData } from '@/app/lib/pdf/InvoicePdf'
+
+// Force the Node runtime — @react-pdf/renderer needs Node's Buffer +
+// fs-level font loading, not the Edge runtime.
+export const runtime = 'nodejs'
 
 export async function GET(
   req: NextRequest,
@@ -59,7 +64,13 @@ export async function GET(
   }
 
   try {
-    const buffer = await renderToBuffer(<InvoicePdf data={data} />)
+    // InvoicePdf returns a <Document>. Call it as a function to get a
+    // Document element directly — @react-pdf/renderer's renderToBuffer
+    // expects ReactElement<DocumentProps>, not an arbitrary component
+    // wrapper. This also avoids the React error #31 that can come from
+    // the new JSX transform producing incompatible element shapes.
+    const element = InvoicePdf({ data }) as ReactElement<DocumentProps>
+    const buffer = await renderToBuffer(element)
     const download = req.nextUrl.searchParams.get('download') === '1'
     const filename = `invoice-${invoice.invoiceNumber}.pdf`
     return new NextResponse(
@@ -76,7 +87,10 @@ export async function GET(
   } catch (e) {
     console.error('[api/invoices/pdf] render failed', e)
     return NextResponse.json(
-      { data: null, error: 'Failed to render PDF' },
+      {
+        data: null,
+        error: `Failed to render PDF: ${e instanceof Error ? e.message : String(e)}`,
+      },
       { status: 500 },
     )
   }

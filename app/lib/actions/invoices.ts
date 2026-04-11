@@ -231,6 +231,29 @@ export async function updateClientBillingState(
   }
 }
 
+export async function updateClientBillingEmail(
+  clientId: string,
+  email: string | null,
+): Promise<StatusResult> {
+  const session = await getSession()
+  if (!session?.user?.id) return { ok: false, error: 'Unauthorized' }
+  const trimmed = email?.trim() || null
+  if (trimmed && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(trimmed)) {
+    return { ok: false, error: 'Invalid email address' }
+  }
+  try {
+    await prisma.tH_Client.update({
+      where: { id: clientId },
+      data: { billingEmail: trimmed },
+    })
+    revalidatePath(`/clients/${clientId}`)
+    return { ok: true }
+  } catch (e) {
+    console.error('[actions/invoices] updateBillingEmail failed', e)
+    return { ok: false, error: 'Failed to update billing email' }
+  }
+}
+
 export async function deleteDraftInvoice(
   invoiceId: string,
 ): Promise<StatusResult> {

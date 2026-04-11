@@ -68,19 +68,25 @@ export function InvoiceActions({
     <div className="flex flex-col items-end gap-2">
       <div className="flex items-center gap-2">
         <StatusBadge status={status} />
+        {/* Email button shows for any non-VOID invoice — admins can
+            re-send after a client loses it, edit and re-send, etc. */}
+        {emailConfigured && isAdmin && status !== 'VOID' && (
+          <button
+            type="button"
+            onClick={() => setShowSend(true)}
+            disabled={isPending}
+            className="th-btn-primary text-xs"
+            title={
+              status === 'DRAFT'
+                ? 'Email PDF to client and transition to SENT'
+                : 'Re-send invoice PDF'
+            }
+          >
+            📧 {status === 'DRAFT' ? 'Email to Client' : 'Resend'}
+          </button>
+        )}
         {status === 'DRAFT' && (
           <>
-            {emailConfigured && isAdmin && (
-              <button
-                type="button"
-                onClick={() => setShowSend(true)}
-                disabled={isPending}
-                className="th-btn-primary text-xs"
-                title="Email PDF to client and transition to SENT"
-              >
-                📧 Email to Client
-              </button>
-            )}
             <button
               type="button"
               onClick={() => transition('SENT')}

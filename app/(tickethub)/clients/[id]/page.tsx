@@ -2,7 +2,7 @@ import Link from 'next/link'
 import { notFound, redirect } from 'next/navigation'
 import { prisma } from '@/app/lib/prisma'
 import { requireAuth, hasMinRole } from '@/app/lib/api-auth'
-import { TaxStateSelector } from './TaxStateSelector'
+import { BillingSettings } from './TaxStateSelector'
 
 export const dynamic = 'force-dynamic'
 
@@ -69,11 +69,14 @@ export default async function ClientDetailPage({
         </div>
       </header>
 
-      <div className="mb-6 flex flex-wrap items-center gap-3">
-        <TaxStateSelector
-          clientId={client.id}
-          initial={client.billingState}
-        />
+      <div className="mb-6 flex flex-wrap items-start gap-3">
+        <div className="flex-1 min-w-[320px]">
+          <BillingSettings
+            clientId={client.id}
+            initialState={client.billingState}
+            initialEmail={client.billingEmail}
+          />
+        </div>
         {canSeeAmounts && (
           <Link
             href={`/invoices/new?clientId=${client.id}`}

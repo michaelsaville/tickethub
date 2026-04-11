@@ -28,6 +28,10 @@ model TH_Client {
   /// at invoice time. Frozen onto TH_Invoice.taxState at invoice creation
   /// so historical invoices survive rate changes.
   billingState  String?
+  /// Direct billing email for invoices — overrides the primary contact
+  /// email when set. Useful when a client has an ap@ / billing@ mailbox
+  /// separate from the person you talk to day to day.
+  billingEmail  String?
   isActive      Boolean  @default(true)
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
