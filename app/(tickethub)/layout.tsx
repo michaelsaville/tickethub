@@ -1,5 +1,7 @@
 import { Sidebar } from '@/app/components/layout/Sidebar'
+import { MobileBottomBar } from '@/app/components/layout/MobileBottomBar'
 import { TimerBar } from '@/app/components/TimerBar'
+import { InstallPrompt } from '@/app/components/InstallPrompt'
 import { getMyTimer } from '@/app/lib/actions/timer'
 
 export default async function TicketHubLayout({
@@ -21,11 +23,16 @@ export default async function TicketHubLayout({
 
   return (
     <div className="flex h-screen">
-      <Sidebar />
+      {/* Desktop sidebar — hidden below md */}
+      <div className="hidden md:block">
+        <Sidebar />
+      </div>
       <main className="flex flex-1 flex-col overflow-hidden">
+        <InstallPrompt />
         <TimerBar initial={timerBarProps} />
-        <div className="flex-1 overflow-y-auto">{children}</div>
+        <div className="flex-1 overflow-y-auto pb-20 md:pb-0">{children}</div>
       </main>
+      <MobileBottomBar />
     </div>
   )
 }
