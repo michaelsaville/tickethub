@@ -1,0 +1,335 @@
+import Link from 'next/link'
+import { notFound, redirect } from 'next/navigation'
+import { prisma } from '@/app/lib/prisma'
+import { requireAuth } from '@/app/lib/api-auth'
+import { getSlaState, slaBadgeClass } from '@/app/lib/sla'
+import { TicketProperties } from './TicketProperties'
+import { CommentComposer } from './CommentComposer'
+
+export const dynamic = 'force-dynamic'
+
+export default async function TicketDetailPage({
+  params,
+}: {
+  params: Promise<{ id: string }>
+}) {
+  const { error } = await requireAuth()
+  if (error) redirect('/api/auth/signin')
+
+  const { id } = await params
+  const ticket = await prisma.tH_Ticket.findUnique({
+    where: { id },
+    include: {
+      client: {
+        include: {
+          tickets: {
+            where: {
+              id: { not: id },
+              deletedAt: null,
+              status: { notIn: ['CLOSED', 'CANCELLED', 'RESOLVED'] },
+            },
+            orderBy: { updatedAt: 'desc' },
+            take: 8,
+            select: {
+              id: true,
+              ticketNumber: true,
+              title: true,
+              status: true,
+              priority: true,
+            },
+          },
+        },
+      },
+      contact: true,
+      site: true,
+      contract: true,
+      asset: true,
+      assignedTo: { select: { id: true, name: true, email: true } },
+      createdBy: { select: { id: true, name: true } },
+      comments: {
+        orderBy: { createdAt: 'asc' },
+        include: { author: { select: { id: true, name: true } } },
+      },
+      timeline: {
+        orderBy: { createdAt: 'asc' },
+        include: { user: { select: { id: true, name: true } } },
+      },
+    },
+  })
+  if (!ticket || ticket.deletedAt) notFound()
+
+  // Clear unread flag on staff view
+  if (ticket.isUnread) {
+    await prisma.tH_Ticket.update({
+      where: { id },
+      data: { isUnread: false },
+    })
+  }
+
+  const techs = await prisma.tH_User.findMany({
+    where: { isActive: true },
+    orderBy: { name: 'asc' },
+    select: { id: true, name: true },
+  })
+
+  const sla = getSlaState(ticket)
+
+  type TimelineEntry =
+    | { kind: 'comment'; at: Date; data: (typeof ticket.comments)[number] }
+    | { kind: 'event'; at: Date; data: (typeof ticket.timeline)[number] }
+  const merged: TimelineEntry[] = [
+    ...ticket.comments.map<TimelineEntry>((c) => ({
+      kind: 'comment',
+      at: c.createdAt,
+      data: c,
+    })),
+    ...ticket.timeline
+      .filter((e) => e.type !== 'COMMENT' && e.type !== 'INTERNAL_NOTE')
+      .map<TimelineEntry>((e) => ({ kind: 'event', at: e.createdAt, data: e })),
+  ].sort((a, b) => a.at.getTime() - b.at.getTime())
+
+  return (
+    <div className="p-6">
+      <header className="mb-6">
+        <Link
+          href="/tickets"
+          className="text-xs text-th-text-secondary hover:text-accent"
+        >
+          ← Back to tickets
+        </Link>
+        <div className="mt-2 flex items-baseline gap-3">
+          <span className="font-mono text-sm text-th-text-muted">
+            #{ticket.ticketNumber}
+          </span>
+          <h1 className="font-mono text-2xl text-slate-100">{ticket.title}</h1>
+        </div>
+        <div className="mt-1 text-xs text-th-text-secondary">
+          Opened by {ticket.createdBy.name} ·{' '}
+          <Link
+            href={`/clients/${ticket.client.id}`}
+            className="hover:text-accent"
+          >
+            {ticket.client.name}
+          </Link>
+          {ticket.contact && ` · ${ticket.contact.firstName} ${ticket.contact.lastName}`}
+        </div>
+      </header>
+
+      <div className="grid gap-6 xl:grid-cols-[260px,1fr,300px]">
+        {/* Left: Properties */}
+        <div>
+          <TicketProperties
+            ticketId={ticket.id}
+            status={ticket.status}
+            priority={ticket.priority}
+            assignedToId={ticket.assignedToId}
+            type={ticket.type}
+            techs={techs}
+          />
+          <dl className="th-card mt-4 space-y-3 text-xs">
+            {ticket.site && (
+              <div>
+                <dt className="font-mono text-[10px] uppercase tracking-wider text-th-text-muted">
+                  Site
+                </dt>
+                <dd className="mt-1 text-slate-200">{ticket.site.name}</dd>
+              </div>
+            )}
+            {ticket.contract && (
+              <div>
+                <dt className="font-mono text-[10px] uppercase tracking-wider text-th-text-muted">
+                  Contract
+                </dt>
+                <dd className="mt-1 text-slate-200">
+                  {ticket.contract.name}
+                  <span className="ml-2 text-th-text-muted">
+                    {ticket.contract.type}
+                  </span>
+                </dd>
+              </div>
+            )}
+            {ticket.asset && (
+              <div>
+                <dt className="font-mono text-[10px] uppercase tracking-wider text-th-text-muted">
+                  Asset
+                </dt>
+                <dd className="mt-1 text-slate-200">{ticket.asset.name}</dd>
+              </div>
+            )}
+            <div>
+              <dt className="font-mono text-[10px] uppercase tracking-wider text-th-text-muted">
+                Created
+              </dt>
+              <dd className="mt-1 text-slate-300">
+                {ticket.createdAt.toLocaleString()}
+              </dd>
+            </div>
+            {ticket.slaResolveDue && (
+              <div>
+                <dt className="font-mono text-[10px] uppercase tracking-wider text-th-text-muted">
+                  SLA
+                </dt>
+                <dd className="mt-1">
+                  <span className={slaBadgeClass(sla.health)}>{sla.label}</span>
+                </dd>
+              </div>
+            )}
+          </dl>
+        </div>
+
+        {/* Middle: Description + Timeline + Composer */}
+        <div className="space-y-4">
+          {ticket.description && (
+            <div className="th-card">
+              <div className="mb-2 font-mono text-[10px] uppercase tracking-wider text-th-text-muted">
+                Description
+              </div>
+              <div className="whitespace-pre-wrap text-sm text-slate-200">
+                {ticket.description}
+              </div>
+            </div>
+          )}
+
+          <div className="th-card">
+            <div className="mb-3 font-mono text-[10px] uppercase tracking-wider text-th-text-muted">
+              Timeline
+            </div>
+            {merged.length === 0 ? (
+              <p className="text-xs text-th-text-muted">
+                No activity yet. Add the first comment below.
+              </p>
+            ) : (
+              <ol className="space-y-3">
+                {merged.map((entry, i) => (
+                  <li key={i} className="flex gap-3">
+                    <div className="mt-1 h-2 w-2 flex-none rounded-full bg-accent/60" />
+                    <div className="flex-1 text-sm">
+                      {entry.kind === 'comment' ? (
+                        <CommentRow comment={entry.data} />
+                      ) : (
+                        <EventRow event={entry.data} />
+                      )}
+                    </div>
+                  </li>
+                ))}
+              </ol>
+            )}
+          </div>
+
+          <CommentComposer ticketId={ticket.id} />
+        </div>
+
+        {/* Right: Client Context */}
+        <aside className="space-y-4">
+          <h2 className="font-mono text-[10px] uppercase tracking-wider text-th-text-muted">
+            Client Context
+          </h2>
+          {ticket.client.internalNotes && (
+            <div className="th-card border-accent/40 bg-accent/5">
+              <div className="font-mono text-[10px] uppercase tracking-wider text-accent">
+                Internal Notes
+              </div>
+              <p className="mt-2 whitespace-pre-wrap text-xs text-slate-200">
+                {ticket.client.internalNotes}
+              </p>
+            </div>
+          )}
+          <div className="th-card">
+            <div className="font-mono text-[10px] uppercase tracking-wider text-th-text-muted">
+              Other Open Tickets ({ticket.client.tickets.length})
+            </div>
+            {ticket.client.tickets.length === 0 ? (
+              <p className="mt-2 text-xs text-th-text-muted">
+                No other open tickets for this client.
+              </p>
+            ) : (
+              <ul className="mt-2 space-y-1 text-xs">
+                {ticket.client.tickets.map((t) => (
+                  <li key={t.id}>
+                    <Link
+                      href={`/tickets/${t.id}`}
+                      className="text-slate-300 hover:text-accent"
+                    >
+                      <span className="font-mono text-th-text-muted">
+                        #{t.ticketNumber}
+                      </span>{' '}
+                      {t.title}
+                    </Link>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
+        </aside>
+      </div>
+    </div>
+  )
+}
+
+function CommentRow({
+  comment,
+}: {
+  comment: {
+    body: string
+    isInternal: boolean
+    createdAt: Date
+    author: { name: string }
+  }
+}) {
+  return (
+    <div
+      className={
+        comment.isInternal
+          ? 'rounded-md border border-accent/30 bg-accent/5 p-3'
+          : 'rounded-md border border-th-border bg-th-base p-3'
+      }
+    >
+      <div className="flex items-baseline gap-2 text-xs">
+        <span className="font-medium text-slate-200">{comment.author.name}</span>
+        {comment.isInternal && (
+          <span className="font-mono text-[10px] uppercase tracking-wider text-accent">
+            Internal
+          </span>
+        )}
+        <span className="ml-auto text-th-text-muted">
+          {comment.createdAt.toLocaleString()}
+        </span>
+      </div>
+      <div className="mt-1 whitespace-pre-wrap text-sm text-slate-100">
+        {comment.body}
+      </div>
+    </div>
+  )
+}
+
+function EventRow({
+  event,
+}: {
+  event: {
+    type: string
+    data: unknown
+    createdAt: Date
+    user: { name: string } | null
+  }
+}) {
+  const data = (event.data ?? {}) as Record<string, unknown>
+  let label = event.type
+  if (event.type === 'STATUS_CHANGE') {
+    label = `Status: ${String(data.from)} → ${String(data.to)}`
+  } else if (event.type === 'PRIORITY_CHANGE') {
+    label = `Priority: ${String(data.from)} → ${String(data.to)}`
+  } else if (event.type === 'ASSIGNED') {
+    label = data.to ? `Assigned` : `Unassigned`
+  } else if (event.type === 'CREATED') {
+    label = 'Ticket created'
+  }
+  return (
+    <div className="text-xs text-th-text-secondary">
+      <span className="text-slate-300">{event.user?.name ?? 'System'}</span>{' '}
+      <span>· {label}</span>
+      <span className="ml-2 text-th-text-muted">
+        {event.createdAt.toLocaleString()}
+      </span>
+    </div>
+  )
+}

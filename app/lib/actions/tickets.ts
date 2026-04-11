@@ -1,0 +1,243 @@
+'use server'
+
+import { revalidatePath } from 'next/cache'
+import { redirect } from 'next/navigation'
+import { getServerSession } from 'next-auth'
+import type {
+  TH_TicketPriority,
+  TH_TicketStatus,
+  TH_TicketType,
+} from '@prisma/client'
+import { prisma } from '@/app/lib/prisma'
+import { authOptions } from '@/app/lib/auth'
+
+async function getUserId(): Promise<string | null> {
+  const session = await getServerSession(authOptions)
+  return session?.user?.id ?? null
+}
+
+export type CreateTicketResult =
+  | { ok: true; ticketId: string }
+  | { ok: false; error: string }
+
+export async function createTicket(
+  _prev: CreateTicketResult | null,
+  formData: FormData,
+): Promise<CreateTicketResult> {
+  const userId = await getUserId()
+  if (!userId) return { ok: false, error: 'Unauthorized' }
+
+  const clientId = formData.get('clientId') as string | null
+  const title = (formData.get('title') as string | null)?.trim()
+  const description = (formData.get('description') as string | null)?.trim() || null
+  const priority = (formData.get('priority') as TH_TicketPriority | null) ?? 'MEDIUM'
+  const type = (formData.get('type') as TH_TicketType | null) ?? 'INCIDENT'
+  const assignedToId = (formData.get('assignedToId') as string | null) || null
+
+  if (!clientId) return { ok: false, error: 'Client is required' }
+  if (!title) return { ok: false, error: 'Title is required' }
+
+  try {
+    // Link the ticket to the client's Global Contract by default so the
+    // charge cascade has somewhere to land even if no contract is chosen.
+    const globalContract = await prisma.tH_Contract.findFirst({
+      where: { clientId, isGlobal: true },
+      select: { id: true },
+    })
+
+    const ticket = await prisma.$transaction(async (tx) => {
+      const t = await tx.tH_Ticket.create({
+        data: {
+          clientId,
+          contractId: globalContract?.id ?? null,
+          title,
+          description,
+          priority,
+          type,
+          assignedToId,
+          createdById: userId,
+          status: assignedToId ? 'OPEN' : 'NEW',
+        },
+      })
+      await tx.tH_TicketEvent.create({
+        data: {
+          ticketId: t.id,
+          userId,
+          type: 'CREATED',
+          data: { priority, type },
+        },
+      })
+      if (assignedToId) {
+        await tx.tH_TicketEvent.create({
+          data: {
+            ticketId: t.id,
+            userId,
+            type: 'ASSIGNED',
+            data: { assignedToId },
+          },
+        })
+      }
+      return t
+    })
+    revalidatePath('/tickets')
+    revalidatePath(`/clients/${clientId}`)
+    redirect(`/tickets/${ticket.id}`)
+  } catch (e: unknown) {
+    if (e && typeof e === 'object' && 'digest' in e) throw e
+    console.error('[actions/tickets] create failed', e)
+    return { ok: false, error: 'Failed to create ticket' }
+  }
+}
+
+export async function addComment(
+  ticketId: string,
+  body: string,
+  isInternal: boolean,
+): Promise<{ ok: boolean; error?: string }> {
+  const userId = await getUserId()
+  if (!userId) return { ok: false, error: 'Unauthorized' }
+  const trimmed = body.trim()
+  if (!trimmed) return { ok: false, error: 'Comment is empty' }
+
+  try {
+    await prisma.$transaction(async (tx) => {
+      await tx.tH_TicketComment.create({
+        data: { ticketId, authorId: userId, body: trimmed, isInternal },
+      })
+      await tx.tH_TicketEvent.create({
+        data: {
+          ticketId,
+          userId,
+          type: isInternal ? 'INTERNAL_NOTE' : 'COMMENT',
+        },
+      })
+      // A staff comment clears the unread flag
+      await tx.tH_Ticket.update({
+        where: { id: ticketId },
+        data: { isUnread: false },
+      })
+    })
+    revalidatePath(`/tickets/${ticketId}`)
+    return { ok: true }
+  } catch (e) {
+    console.error('[actions/tickets] addComment failed', e)
+    return { ok: false, error: 'Failed to add comment' }
+  }
+}
+
+export async function updateTicketStatus(
+  ticketId: string,
+  status: TH_TicketStatus,
+): Promise<{ ok: boolean; error?: string }> {
+  const userId = await getUserId()
+  if (!userId) return { ok: false, error: 'Unauthorized' }
+  try {
+    await prisma.$transaction(async (tx) => {
+      const current = await tx.tH_Ticket.findUnique({
+        where: { id: ticketId },
+        select: { status: true },
+      })
+      if (!current) throw new Error('Not found')
+      if (current.status === status) return
+      await tx.tH_Ticket.update({
+        where: { id: ticketId },
+        data: {
+          status,
+          closedAt:
+            status === 'CLOSED' || status === 'CANCELLED' ? new Date() : null,
+        },
+      })
+      await tx.tH_TicketEvent.create({
+        data: {
+          ticketId,
+          userId,
+          type: 'STATUS_CHANGE',
+          data: { from: current.status, to: status },
+        },
+      })
+    })
+    revalidatePath(`/tickets/${ticketId}`)
+    revalidatePath('/tickets')
+    return { ok: true }
+  } catch (e) {
+    console.error('[actions/tickets] updateStatus failed', e)
+    return { ok: false, error: 'Failed to update status' }
+  }
+}
+
+export async function assignTicket(
+  ticketId: string,
+  assignedToId: string | null,
+): Promise<{ ok: boolean; error?: string }> {
+  const userId = await getUserId()
+  if (!userId) return { ok: false, error: 'Unauthorized' }
+  try {
+    await prisma.$transaction(async (tx) => {
+      const current = await tx.tH_Ticket.findUnique({
+        where: { id: ticketId },
+        select: { assignedToId: true, status: true },
+      })
+      if (!current) throw new Error('Not found')
+      if (current.assignedToId === assignedToId) return
+      await tx.tH_Ticket.update({
+        where: { id: ticketId },
+        data: {
+          assignedToId,
+          // First assignment moves NEW → OPEN
+          status:
+            current.status === 'NEW' && assignedToId ? 'OPEN' : current.status,
+        },
+      })
+      await tx.tH_TicketEvent.create({
+        data: {
+          ticketId,
+          userId,
+          type: 'ASSIGNED',
+          data: { from: current.assignedToId, to: assignedToId },
+        },
+      })
+    })
+    revalidatePath(`/tickets/${ticketId}`)
+    revalidatePath('/tickets')
+    return { ok: true }
+  } catch (e) {
+    console.error('[actions/tickets] assign failed', e)
+    return { ok: false, error: 'Failed to assign' }
+  }
+}
+
+export async function updateTicketPriority(
+  ticketId: string,
+  priority: TH_TicketPriority,
+): Promise<{ ok: boolean; error?: string }> {
+  const userId = await getUserId()
+  if (!userId) return { ok: false, error: 'Unauthorized' }
+  try {
+    const current = await prisma.tH_Ticket.findUnique({
+      where: { id: ticketId },
+      select: { priority: true },
+    })
+    if (!current) return { ok: false, error: 'Not found' }
+    if (current.priority === priority) return { ok: true }
+    await prisma.$transaction([
+      prisma.tH_Ticket.update({
+        where: { id: ticketId },
+        data: { priority },
+      }),
+      prisma.tH_TicketEvent.create({
+        data: {
+          ticketId,
+          userId,
+          type: 'PRIORITY_CHANGE',
+          data: { from: current.priority, to: priority },
+        },
+      }),
+    ])
+    revalidatePath(`/tickets/${ticketId}`)
+    revalidatePath('/tickets')
+    return { ok: true }
+  } catch (e) {
+    console.error('[actions/tickets] updatePriority failed', e)
+    return { ok: false, error: 'Failed to update priority' }
+  }
+}
