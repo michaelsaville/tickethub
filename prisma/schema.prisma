@@ -1,0 +1,599 @@
+// TicketHub Prisma Schema
+// Shared PostgreSQL database with DocHub. All models prefixed TH_ and mapped
+// to th_* tables so no namespace conflicts with DocHub models.
+// Schema is additive only after first migration — never rename or drop columns.
+// All monetary values stored as integers (cents).
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ─── CLIENTS ──────────────────────────────────────────────────────────────
+
+model TH_Client {
+  id            String   @id @default(cuid())
+  name          String
+  shortCode     String?  @unique
+  internalNotes String?
+  isActive      Boolean  @default(true)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  contacts  TH_Contact[]
+  sites     TH_Site[]
+  contracts TH_Contract[]
+  tickets   TH_Ticket[]
+  assets    TH_Asset[]
+  invoices  TH_Invoice[]
+
+  @@map("th_clients")
+}
+
+model TH_Contact {
+  id        String   @id @default(cuid())
+  clientId  String
+  client    TH_Client @relation(fields: [clientId], references: [id])
+  firstName String
+  lastName  String
+  email     String?
+  phone     String?
+  jobTitle  String?
+  isPrimary Boolean  @default(false)
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  tickets TH_Ticket[]
+
+  @@map("th_contacts")
+}
+
+model TH_Site {
+  id        String   @id @default(cuid())
+  clientId  String
+  client    TH_Client @relation(fields: [clientId], references: [id])
+  name      String
+  address   String?
+  city      String?
+  state     String?
+  zip       String?
+  country   String   @default("US")
+  notes     String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  tickets TH_Ticket[]
+
+  @@map("th_sites")
+}
+
+// ─── CONTRACTS ────────────────────────────────────────────────────────────
+
+enum TH_ContractType {
+  GLOBAL
+  BLOCK_HOURS
+  RECURRING
+  TIME_AND_MATERIAL
+  PROJECT
+}
+
+enum TH_ContractStatus {
+  ACTIVE
+  EXPIRED
+  CANCELLED
+  PENDING
+}
+
+model TH_Contract {
+  id             String            @id @default(cuid())
+  clientId       String
+  client         TH_Client         @relation(fields: [clientId], references: [id])
+  name           String
+  type           TH_ContractType   @default(GLOBAL)
+  status         TH_ContractStatus @default(ACTIVE)
+  startDate      DateTime?
+  endDate        DateTime?
+  monthlyFee     Int?
+  blockHours     Float?
+  blockHoursUsed Float             @default(0)
+  notes          String?
+  isGlobal       Boolean           @default(false)
+  createdAt      DateTime          @default(now())
+  updatedAt      DateTime          @updatedAt
+
+  priceExceptions TH_ContractPriceException[]
+  charges         TH_Charge[]
+  tickets         TH_Ticket[]
+
+  @@map("th_contracts")
+}
+
+model TH_ContractPriceException {
+  id            String      @id @default(cuid())
+  contractId    String
+  contract      TH_Contract @relation(fields: [contractId], references: [id])
+  itemId        String
+  item          TH_Item     @relation(fields: [itemId], references: [id])
+  priceOverride Int
+  createdAt     DateTime    @default(now())
+
+  @@map("th_contract_price_exceptions")
+}
+
+// ─── ITEMS (CATALOG) ──────────────────────────────────────────────────────
+
+enum TH_ItemType {
+  LABOR
+  PART
+  EXPENSE
+  LICENSE
+  CONTRACT_FEE
+}
+
+model TH_Item {
+  id           String      @id @default(cuid())
+  name         String
+  code         String?     @unique
+  type         TH_ItemType
+  defaultPrice Int
+  costPrice    Int?
+  taxable      Boolean     @default(true)
+  accountCode  String?
+  isActive     Boolean     @default(true)
+  createdAt    DateTime    @default(now())
+  updatedAt    DateTime    @updatedAt
+
+  charges         TH_Charge[]
+  priceExceptions TH_ContractPriceException[]
+
+  @@map("th_items")
+}
+
+// ─── CHARGES (THE BILLING BACKBONE) ───────────────────────────────────────
+
+enum TH_ChargeStatus {
+  NOT_BILLABLE
+  BILLABLE
+  INVOICED
+  LOCKED
+}
+
+enum TH_ChargeType {
+  LABOR
+  PART
+  EXPENSE
+  CONTRACT_FEE
+}
+
+model TH_Charge {
+  id           String          @id @default(cuid())
+  ticketId     String?
+  ticket       TH_Ticket?      @relation(fields: [ticketId], references: [id])
+  contractId   String
+  contract     TH_Contract     @relation(fields: [contractId], references: [id])
+  itemId       String
+  item         TH_Item         @relation(fields: [itemId], references: [id])
+  technicianId String?
+  technician   TH_User?        @relation(fields: [technicianId], references: [id])
+  invoiceId    String?
+  invoice      TH_Invoice?     @relation(fields: [invoiceId], references: [id])
+
+  type        TH_ChargeType
+  status      TH_ChargeStatus @default(BILLABLE)
+  description String?
+
+  timeSpentMinutes   Int?
+  timeChargedMinutes Int?
+
+  quantity   Float @default(1)
+  unitPrice  Int
+  totalPrice Int
+
+  workDate   DateTime @default(now())
+  isBillable Boolean  @default(true)
+
+  externalRef String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  fuelReceipt TH_FuelReceipt?
+  ticketPart  TH_TicketPart?
+
+  @@map("th_charges")
+}
+
+// ─── TICKETS ──────────────────────────────────────────────────────────────
+
+enum TH_TicketStatus {
+  NEW
+  OPEN
+  IN_PROGRESS
+  WAITING_CUSTOMER
+  WAITING_THIRD_PARTY
+  RESOLVED
+  CLOSED
+  CANCELLED
+}
+
+enum TH_TicketPriority {
+  URGENT
+  HIGH
+  MEDIUM
+  LOW
+}
+
+enum TH_TicketType {
+  INCIDENT
+  SERVICE_REQUEST
+  PROBLEM
+  CHANGE
+  MAINTENANCE
+  INTERNAL
+}
+
+model TH_Ticket {
+  id           String       @id @default(cuid())
+  ticketNumber Int          @unique @default(autoincrement())
+  clientId     String
+  client       TH_Client    @relation(fields: [clientId], references: [id])
+  contactId    String?
+  contact      TH_Contact?  @relation(fields: [contactId], references: [id])
+  siteId       String?
+  site         TH_Site?     @relation(fields: [siteId], references: [id])
+  contractId   String?
+  contract     TH_Contract? @relation(fields: [contractId], references: [id])
+  assetId      String?
+  asset        TH_Asset?    @relation(fields: [assetId], references: [id])
+  assignedToId String?
+  assignedTo   TH_User?     @relation("AssignedTickets", fields: [assignedToId], references: [id])
+  createdById  String
+  createdBy    TH_User      @relation("CreatedTickets", fields: [createdById], references: [id])
+
+  title       String
+  description String?
+  status      TH_TicketStatus   @default(NEW)
+  priority    TH_TicketPriority @default(MEDIUM)
+  type        TH_TicketType     @default(INCIDENT)
+  board       String?
+
+  slaResponseDue DateTime?
+  slaResolveDue  DateTime?
+  slaBreached    Boolean   @default(false)
+  slaPausedAt    DateTime?
+
+  isUnread        Boolean   @default(false)
+  lastClientReply DateTime?
+
+  estimatedMinutes Int?
+
+  checklist Json?
+
+  closedAt  DateTime?
+  deletedAt DateTime?
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+
+  comments     TH_TicketComment[]
+  charges      TH_Charge[]
+  attachments  TH_Attachment[]
+  timeline     TH_TicketEvent[]
+  parts        TH_TicketPart[]
+  signatures   TH_Signature[]
+  tags         TH_TicketTag[]
+  appointments TH_Appointment[]
+
+  @@map("th_tickets")
+}
+
+model TH_TicketComment {
+  id         String    @id @default(cuid())
+  ticketId   String
+  ticket     TH_Ticket @relation(fields: [ticketId], references: [id])
+  authorId   String
+  author     TH_User   @relation(fields: [authorId], references: [id])
+  body       String
+  isInternal Boolean   @default(false)
+  createdAt  DateTime  @default(now())
+  updatedAt  DateTime  @updatedAt
+
+  @@map("th_ticket_comments")
+}
+
+model TH_TicketEvent {
+  id        String    @id @default(cuid())
+  ticketId  String
+  ticket    TH_Ticket @relation(fields: [ticketId], references: [id])
+  userId    String?
+  user      TH_User?  @relation(fields: [userId], references: [id])
+  type      String
+  data      Json?
+  createdAt DateTime  @default(now())
+
+  @@map("th_ticket_events")
+}
+
+model TH_TicketTag {
+  id       String    @id @default(cuid())
+  ticketId String
+  ticket   TH_Ticket @relation(fields: [ticketId], references: [id])
+  tag      String
+
+  @@unique([ticketId, tag])
+  @@map("th_ticket_tags")
+}
+
+// ─── PARTS (PROCUREMENT) ──────────────────────────────────────────────────
+
+enum TH_PartStatus {
+  PENDING_ORDER
+  ORDERED
+  RECEIVED
+  INSTALLED
+  RETURNED
+}
+
+model TH_TicketPart {
+  id        String    @id @default(cuid())
+  ticketId  String
+  ticket    TH_Ticket @relation(fields: [ticketId], references: [id])
+  addedById String
+  addedBy   TH_User   @relation(fields: [addedById], references: [id])
+
+  name        String
+  asin        String?
+  vendor      String? @default("Amazon Business")
+  vendorUrl   String?
+  imageUrl    String?
+  orderNumber String?
+
+  quantity  Int           @default(1)
+  unitCost  Int
+  unitPrice Int
+  status    TH_PartStatus @default(PENDING_ORDER)
+
+  chargeId String?    @unique
+  charge   TH_Charge? @relation(fields: [chargeId], references: [id])
+
+  accountCode String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("th_ticket_parts")
+}
+
+// ─── ASSETS ───────────────────────────────────────────────────────────────
+
+model TH_Asset {
+  id        String    @id @default(cuid())
+  clientId  String
+  client    TH_Client @relation(fields: [clientId], references: [id])
+  name      String
+  type      String?
+  make      String?
+  model     String?
+  serial    String?
+  ipAddress String?
+  notes     String?
+  isActive  Boolean   @default(true)
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+
+  tickets TH_Ticket[]
+
+  @@map("th_assets")
+}
+
+// ─── INVOICES ─────────────────────────────────────────────────────────────
+
+enum TH_InvoiceStatus {
+  DRAFT
+  SENT
+  VIEWED
+  PAID
+  OVERDUE
+  VOID
+}
+
+model TH_Invoice {
+  id            String    @id @default(cuid())
+  invoiceNumber Int       @unique @default(autoincrement())
+  clientId      String
+  client        TH_Client @relation(fields: [clientId], references: [id])
+  contractId    String?
+
+  status    TH_InvoiceStatus @default(DRAFT)
+  issueDate DateTime         @default(now())
+  dueDate   DateTime?
+
+  subtotal    Int
+  taxAmount   Int @default(0)
+  totalAmount Int
+
+  notes String?
+
+  externalRef String?
+  sentAt      DateTime?
+  paidAt      DateTime?
+
+  deletedAt DateTime?
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+
+  charges     TH_Charge[]
+  attachments TH_Attachment[]
+
+  @@map("th_invoices")
+}
+
+// ─── FUEL RECEIPTS ────────────────────────────────────────────────────────
+
+model TH_FuelReceipt {
+  id            String  @id @default(cuid())
+  submittedById String
+  submittedBy   TH_User @relation(fields: [submittedById], references: [id])
+
+  date           DateTime?
+  vendor         String?
+  address        String?
+  fuelType       String?
+  gallons        Float?
+  pricePerGallon Float?
+  totalAmount    Int?
+  paymentMethod  String?
+  vehicle        String?
+  notes          String?
+
+  imageUrl String?
+
+  chargeId String?    @unique
+  charge   TH_Charge? @relation(fields: [chargeId], references: [id])
+
+  accountCode String? @default("Fuel & Vehicle Expense")
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("th_fuel_receipts")
+}
+
+// ─── SCHEDULING ───────────────────────────────────────────────────────────
+
+model TH_Appointment {
+  id           String    @id @default(cuid())
+  ticketId     String
+  ticket       TH_Ticket @relation(fields: [ticketId], references: [id])
+  technicianId String
+  technician   TH_User   @relation(fields: [technicianId], references: [id])
+
+  scheduledStart DateTime
+  scheduledEnd   DateTime
+  actualStart    DateTime?
+  actualEnd      DateTime?
+
+  notes  String?
+  status String  @default("SCHEDULED")
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("th_appointments")
+}
+
+// ─── USERS ────────────────────────────────────────────────────────────────
+
+model TH_User {
+  id         String  @id @default(cuid())
+  entraId    String  @unique
+  email      String  @unique
+  name       String
+  role       String  @default("TECH")
+  hourlyRate Int?
+  isActive   Boolean @default(true)
+
+  togglToken    String?
+  todoistToken  String?
+  pushoverToken String?
+  ntfyTopic     String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  assignedTickets TH_Ticket[]        @relation("AssignedTickets")
+  createdTickets  TH_Ticket[]        @relation("CreatedTickets")
+  charges         TH_Charge[]
+  comments        TH_TicketComment[]
+  appointments    TH_Appointment[]
+  fuelReceipts    TH_FuelReceipt[]
+  ticketEvents    TH_TicketEvent[]
+  parts           TH_TicketPart[]
+
+  @@map("th_users")
+}
+
+// ─── ATTACHMENTS & SIGNATURES ─────────────────────────────────────────────
+
+model TH_Attachment {
+  id           String      @id @default(cuid())
+  ticketId     String?
+  ticket       TH_Ticket?  @relation(fields: [ticketId], references: [id])
+  invoiceId    String?
+  invoice      TH_Invoice? @relation(fields: [invoiceId], references: [id])
+  uploadedById String
+  filename     String
+  fileUrl      String
+  mimeType     String
+  sizeBytes    Int
+  createdAt    DateTime    @default(now())
+
+  @@map("th_attachments")
+}
+
+model TH_Signature {
+  id           String    @id @default(cuid())
+  ticketId     String
+  ticket       TH_Ticket @relation(fields: [ticketId], references: [id])
+  signedByName String
+  signatureUrl String
+  gpsLat       Float?
+  gpsLng       Float?
+  createdAt    DateTime  @default(now())
+
+  @@map("th_signatures")
+}
+
+// ─── OFFLINE SYNC QUEUE ───────────────────────────────────────────────────
+
+model TH_SyncQueue {
+  id         String    @id @default(cuid())
+  userId     String
+  type       String
+  entityType String
+  entityId   String?
+  payload    Json
+  status     String    @default("PENDING")
+  retryCount Int       @default(0)
+  error      String?
+  createdAt  DateTime  @default(now())
+  syncedAt   DateTime?
+
+  @@map("th_sync_queue")
+}
+
+// ─── KNOWLEDGE BASE ───────────────────────────────────────────────────────
+
+model TH_KBArticle {
+  id             String   @id @default(cuid())
+  title          String
+  body           String
+  tags           String[]
+  isPublic       Boolean  @default(false)
+  sourceTicketId String?
+  authorId       String
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  @@map("th_kb_articles")
+}
+
+// ─── NOTIFICATIONS ────────────────────────────────────────────────────────
+
+model TH_Notification {
+  id        String    @id @default(cuid())
+  userId    String
+  type      String
+  title     String
+  body      String
+  isRead    Boolean   @default(false)
+  data      Json?
+  createdAt DateTime  @default(now())
+  readAt    DateTime?
+
+  @@map("th_notifications")
+}

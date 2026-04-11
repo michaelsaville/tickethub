@@ -1,0 +1,170 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  /* Brand */
+  --th-accent: #f97316;
+  --th-accent-hover: #ea6c0a;
+  --th-accent-muted: #fed7aa;
+
+  /* Backgrounds (dark theme) */
+  --th-bg-base: #0a0f1a;
+  --th-bg-surface: #0d1526;
+  --th-bg-elevated: #1e293b;
+  --th-border: #1e3a5f;
+
+  /* Text */
+  --th-text-primary: #e2e8f0;
+  --th-text-secondary: #94a3b8;
+  --th-text-muted: #475569;
+
+  /* Status */
+  --th-new: #3b82f6;
+  --th-open: #2563eb;
+  --th-in-progress: #f59e0b;
+  --th-waiting: #8b5cf6;
+  --th-resolved: #10b981;
+  --th-closed: #6b7280;
+  --th-cancelled: #374151;
+
+  /* Priority */
+  --th-urgent: #ef4444;
+  --th-high: #f97316;
+  --th-medium: #3b82f6;
+  --th-low: #6b7280;
+
+  /* SLA health */
+  --th-sla-ok: #10b981;
+  --th-sla-warning: #f59e0b;
+  --th-sla-critical: #ef4444;
+  --th-sla-paused: #6b7280;
+
+  --th-font-mono: 'DM Mono', 'Courier New', monospace;
+  --th-font-sans: 'Inter', system-ui, sans-serif;
+}
+
+html,
+body {
+  background: var(--th-bg-base);
+  color: var(--th-text-primary);
+  font-family: var(--th-font-sans);
+  -webkit-font-smoothing: antialiased;
+}
+
+@layer components {
+  .th-card {
+    @apply rounded-lg border border-th-border bg-th-surface p-4;
+  }
+
+  .th-input {
+    @apply w-full rounded-md border border-th-border bg-th-base px-3 py-2 text-sm text-slate-200 placeholder:text-slate-500 focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent;
+  }
+
+  .th-btn-primary {
+    @apply inline-flex items-center justify-center gap-2 rounded-md bg-accent px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-accent-hover disabled:opacity-50;
+  }
+
+  .th-btn-secondary {
+    @apply inline-flex items-center justify-center gap-2 rounded-md border border-th-border bg-th-elevated px-4 py-2 text-sm font-medium text-slate-200 transition-colors hover:bg-th-border disabled:opacity-50;
+  }
+
+  .th-btn-ghost {
+    @apply inline-flex items-center justify-center gap-2 rounded-md px-3 py-1.5 text-sm text-slate-300 transition-colors hover:bg-th-elevated;
+  }
+
+  /* Status badges (high emphasis: filled) */
+  .badge {
+    @apply inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-medium;
+  }
+
+  .badge-status-new {
+    @apply badge text-white;
+    background: var(--th-new);
+  }
+  .badge-status-open {
+    @apply badge text-white;
+    background: var(--th-open);
+  }
+  .badge-status-in-progress {
+    @apply badge text-white;
+    background: var(--th-in-progress);
+  }
+  .badge-status-waiting-customer,
+  .badge-status-waiting-third-party {
+    @apply badge text-white;
+    background: var(--th-waiting);
+  }
+  .badge-status-resolved {
+    @apply badge text-white;
+    background: var(--th-resolved);
+  }
+  .badge-status-closed {
+    @apply badge text-white;
+    background: var(--th-closed);
+  }
+  .badge-status-cancelled {
+    @apply badge text-white;
+    background: var(--th-cancelled);
+  }
+
+  /* Priority badges (outlined) */
+  .badge-priority-urgent {
+    @apply badge border text-white;
+    border-color: var(--th-urgent);
+    background: var(--th-urgent);
+  }
+  .badge-priority-high {
+    @apply badge border;
+    border-color: var(--th-high);
+    color: var(--th-high);
+  }
+  .badge-priority-medium {
+    @apply badge border;
+    border-color: var(--th-medium);
+    color: var(--th-medium);
+  }
+  .badge-priority-low {
+    @apply badge border;
+    border-color: var(--th-low);
+    color: var(--th-low);
+  }
+
+  /* SLA health badges */
+  .badge-sla-ok {
+    @apply badge text-white;
+    background: var(--th-sla-ok);
+  }
+  .badge-sla-warning {
+    @apply badge text-white;
+    background: var(--th-sla-warning);
+  }
+  .badge-sla-critical {
+    @apply badge text-white animate-pulse-slow;
+    background: var(--th-sla-critical);
+  }
+  .badge-sla-breached {
+    @apply badge text-white;
+    background: var(--th-sla-critical);
+  }
+  .badge-sla-paused {
+    @apply badge text-white;
+    background: var(--th-sla-paused);
+  }
+}
+
+/* Thin scrollbars for dense lists */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+::-webkit-scrollbar-track {
+  background: var(--th-bg-base);
+}
+::-webkit-scrollbar-thumb {
+  background: var(--th-border);
+  border-radius: 4px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: var(--th-bg-elevated);
+}
