@@ -22,6 +22,7 @@ export function QuickCharge({
   )
   const [itemId, setItemId] = useState<string>(visibleItems[0]?.id ?? '')
   const [minutes, setMinutes] = useState<number>(30)
+  const [chargedMinutes, setChargedMinutes] = useState<number | ''>('')
   const [quantity, setQuantity] = useState<number>(1)
   const [description, setDescription] = useState('')
   const [err, setErr] = useState<string | null>(null)
@@ -40,6 +41,8 @@ export function QuickCharge({
       const res = await createCharge(ticketId, {
         itemId,
         durationMinutes: isLabor ? minutes : undefined,
+        chargedMinutes:
+          isLabor && chargedMinutes !== '' ? Number(chargedMinutes) : undefined,
         quantity: isLabor ? undefined : quantity,
         description,
       })
@@ -48,9 +51,16 @@ export function QuickCharge({
         return
       }
       setDescription('')
+      setChargedMinutes('')
       if (isLabor) setMinutes(30)
       else setQuantity(1)
     })
+  }
+
+  function roundUpTo(unit: number) {
+    if (!minutes) return
+    const rounded = Math.ceil(minutes / unit) * unit
+    setChargedMinutes(rounded)
   }
 
   if (items.length === 0) {
@@ -149,6 +159,54 @@ export function QuickCharge({
           </div>
         )}
       </div>
+
+      {isLabor && (
+        <div className="mt-3 flex flex-wrap items-center gap-2 text-xs">
+          <span className="font-mono uppercase tracking-wider text-th-text-muted">
+            Billed:
+          </span>
+          <input
+            type="number"
+            min={1}
+            value={chargedMinutes}
+            onChange={(e) =>
+              setChargedMinutes(e.target.value === '' ? '' : Number(e.target.value))
+            }
+            placeholder={`${minutes} (same as spent)`}
+            className="th-input w-28 text-sm"
+          />
+          <span className="text-th-text-muted">min</span>
+          <button
+            type="button"
+            onClick={() => roundUpTo(15)}
+            className="rounded-md border border-th-border px-2 py-1 font-mono text-[10px] uppercase tracking-wider text-th-text-secondary hover:border-accent/40 hover:text-slate-200"
+            title="Round billed up to next 15 min"
+          >
+            ↑15
+          </button>
+          <button
+            type="button"
+            onClick={() => roundUpTo(30)}
+            className="rounded-md border border-th-border px-2 py-1 font-mono text-[10px] uppercase tracking-wider text-th-text-secondary hover:border-accent/40 hover:text-slate-200"
+          >
+            ↑30
+          </button>
+          <button
+            type="button"
+            onClick={() => roundUpTo(60)}
+            className="rounded-md border border-th-border px-2 py-1 font-mono text-[10px] uppercase tracking-wider text-th-text-secondary hover:border-accent/40 hover:text-slate-200"
+          >
+            ↑60
+          </button>
+          <button
+            type="button"
+            onClick={() => setChargedMinutes('')}
+            className="rounded-md border border-th-border px-2 py-1 font-mono text-[10px] uppercase tracking-wider text-th-text-secondary hover:border-accent/40 hover:text-slate-200"
+          >
+            =
+          </button>
+        </div>
+      )}
 
       <input
         type="text"

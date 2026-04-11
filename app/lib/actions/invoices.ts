@@ -31,7 +31,12 @@ async function getSession() {
  */
 export async function createInvoiceForClient(
   clientId: string,
-  opts: { notes?: string; dueInDays?: number } = {},
+  opts: {
+    notes?: string
+    dueInDays?: number
+    /** When present, only include charges whose ids are in this list. */
+    chargeIds?: string[]
+  } = {},
 ): Promise<InvoiceResult> {
   const session = await getSession()
   if (!session?.user?.id) return { ok: false, error: 'Unauthorized' }
@@ -52,15 +57,27 @@ export async function createInvoiceForClient(
     const taxState = client.billingState.toUpperCase()
     const taxRate = await rateForStateAsync(taxState)
 
+    // When specific chargeIds are passed, only include those — but
+    // still verify they're BILLABLE and belong to this client via the
+    // contract, so a bad ID can't sneak charges across clients.
     const charges = await prisma.tH_Charge.findMany({
       where: {
         status: 'BILLABLE',
         contract: { clientId },
+        ...(opts.chargeIds && opts.chargeIds.length > 0
+          ? { id: { in: opts.chargeIds } }
+          : {}),
       },
       include: { item: { select: { taxable: true } } },
     })
     if (charges.length === 0) {
-      return { ok: false, error: 'No billable charges for this client' }
+      return {
+        ok: false,
+        error:
+          opts.chargeIds && opts.chargeIds.length > 0
+            ? 'None of the selected charges are billable'
+            : 'No billable charges for this client',
+      }
     }
 
     const subtotal = charges.reduce((sum, c) => sum + c.totalPrice, 0)

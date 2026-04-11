@@ -89,6 +89,7 @@ export async function sendInvoiceEmail(
     const dueLine = invoice.dueDate
       ? `Due ${invoice.dueDate.toLocaleDateString()}.`
       : ''
+    const trackingUrl = `${process.env.NEXTAUTH_URL ?? 'https://tickethub.pcc2k.com'}/api/invoices/${invoiceId}/viewed`
     const html = `
 <!doctype html>
 <html>
@@ -106,6 +107,7 @@ export async function sendInvoiceEmail(
       ${escapeHtml(ORG.name)} · ${escapeHtml(ORG.website)}<br>
       ${escapeHtml(ORG.address)}, ${escapeHtml(ORG.city)}, ${escapeHtml(ORG.state)} ${escapeHtml(ORG.zip)}
     </p>
+    <img src="${trackingUrl}" width="1" height="1" alt="" style="display:block;border:0" />
   </body>
 </html>
     `.trim()

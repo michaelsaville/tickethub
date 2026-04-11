@@ -26,7 +26,10 @@ export async function createCharge(
   ticketId: string,
   input: {
     itemId: string
+    /** For LABOR: actual time worked in minutes (timeSpent). */
     durationMinutes?: number
+    /** For LABOR: billed minutes override — defaults to durationMinutes. */
+    chargedMinutes?: number
     quantity?: number
     description?: string | null
   },
@@ -82,13 +85,17 @@ export async function createCharge(
     let timeSpentMinutes: number | null = null
     let timeChargedMinutes: number | null = null
     if (chargeType === 'LABOR') {
-      const mins = Number(input.durationMinutes ?? 0)
-      if (!Number.isFinite(mins) || mins <= 0) {
+      const spent = Number(input.durationMinutes ?? 0)
+      if (!Number.isFinite(spent) || spent <= 0) {
         return { ok: false, error: 'Labor duration required' }
       }
-      quantity = mins / 60
-      timeSpentMinutes = Math.round(mins)
-      timeChargedMinutes = Math.round(mins)
+      const chargedRaw = Number(input.chargedMinutes ?? spent)
+      const charged =
+        Number.isFinite(chargedRaw) && chargedRaw > 0 ? chargedRaw : spent
+      // Billed quantity drives price; timeSpent is kept for reporting.
+      quantity = charged / 60
+      timeSpentMinutes = Math.round(spent)
+      timeChargedMinutes = Math.round(charged)
     } else {
       const q = Number(input.quantity ?? 1)
       if (!Number.isFinite(q) || q <= 0) {

@@ -456,9 +456,11 @@ model TH_Invoice {
 
   notes String?
 
-  externalRef String?
-  sentAt      DateTime?
-  paidAt      DateTime?
+  externalRef   String?
+  sentAt        DateTime?
+  paidAt        DateTime?
+  firstViewedAt DateTime?
+  viewCount     Int       @default(0)
 
   deletedAt DateTime?
   createdAt DateTime  @default(now())

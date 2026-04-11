@@ -191,6 +191,21 @@ export default async function InvoiceDetailPage({
               </div>
             </div>
           )}
+          {invoice.firstViewedAt && (
+            <div className="th-card text-xs">
+              <div className="font-mono text-[10px] uppercase tracking-wider text-th-text-muted">
+                First Viewed
+              </div>
+              <div className="mt-1 text-slate-200">
+                {invoice.firstViewedAt.toLocaleString()}
+              </div>
+              <div className="mt-1 text-[10px] text-th-text-muted">
+                {invoice.viewCount}{' '}
+                {invoice.viewCount === 1 ? 'open' : 'opens'} · tracking pixels
+                can be unreliable (image proxies, previews)
+              </div>
+            </div>
+          )}
           {invoice.paidAt && (
             <div className="th-card text-xs">
               <div className="font-mono text-[10px] uppercase tracking-wider text-th-text-muted">
