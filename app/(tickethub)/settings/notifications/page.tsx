@@ -1,0 +1,60 @@
+import Link from 'next/link'
+import { redirect } from 'next/navigation'
+import { prisma } from '@/app/lib/prisma'
+import { requireAuth } from '@/app/lib/api-auth'
+import { NotificationPrefsForm } from './NotificationPrefsForm'
+
+export const dynamic = 'force-dynamic'
+
+export default async function NotificationSettingsPage() {
+  const { session, error } = await requireAuth()
+  if (error) redirect('/api/auth/signin')
+
+  const user = await prisma.tH_User.findUnique({
+    where: { id: session!.user.id },
+    select: {
+      id: true,
+      name: true,
+      email: true,
+      ntfyTopic: true,
+      pushoverToken: true,
+      notificationMode: true,
+    },
+  })
+  if (!user) redirect('/api/auth/signin')
+
+  const ntfyUrl = process.env.NTFY_URL ?? ''
+  const pushoverConfigured = Boolean(process.env.PUSHOVER_APP_TOKEN)
+  const defaultTopic = `tickethub-${user.id}`
+
+  return (
+    <div className="p-6">
+      <header className="mb-6">
+        <Link
+          href="/settings"
+          className="text-xs text-th-text-secondary hover:text-accent"
+        >
+          ← Settings
+        </Link>
+        <h1 className="mt-2 font-mono text-2xl text-slate-100">
+          My Notifications
+        </h1>
+        <p className="mt-1 max-w-2xl text-sm text-th-text-secondary">
+          Personal notification preferences. Topic and tokens are per-user.
+          Critical alerts always go through on Pushover regardless of mode.
+        </p>
+      </header>
+
+      <NotificationPrefsForm
+        initial={{
+          mode: user.notificationMode,
+          ntfyTopic: user.ntfyTopic,
+          pushoverToken: user.pushoverToken,
+        }}
+        defaultTopic={defaultTopic}
+        ntfyBaseUrl={ntfyUrl}
+        pushoverConfigured={pushoverConfigured}
+      />
+    </div>
+  )
+}

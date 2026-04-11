@@ -33,6 +33,11 @@ const GROUPS = [
         title: 'Users',
         description: 'Roles, hourly rates, activation',
       },
+      {
+        href: '/settings/notifications',
+        title: 'My Notifications',
+        description: 'ntfy topic, Pushover key, on-call mode',
+      },
     ],
   },
 ] as const

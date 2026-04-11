@@ -12,6 +12,7 @@ import { prisma } from '@/app/lib/prisma'
 import { authOptions } from '@/app/lib/auth'
 import { isPausingStatus } from '@/app/lib/sla'
 import { computeSlaDates } from '@/app/lib/sla-server'
+import { notifyAdmins, notifyUser, ticketUrl } from '@/app/lib/notify-server'
 
 async function getUserId(): Promise<string | null> {
   const session = await getServerSession(authOptions)
@@ -98,6 +99,32 @@ export async function createTicket(
       }
       return t
     })
+
+    // Notification fan-out — runs after the tx commits, fire-and-forget
+    const client = await prisma.tH_Client.findUnique({
+      where: { id: clientId },
+      select: { name: true, shortCode: true },
+    })
+    const clientLabel = client?.shortCode ?? client?.name ?? 'a client'
+    if (assignedToId && assignedToId !== userId) {
+      notifyUser(assignedToId, {
+        title: `Assigned: #${ticket.ticketNumber}`,
+        body: `${clientLabel} — ${ticket.title}`,
+        url: ticketUrl(ticket.id),
+        priority: priority === 'URGENT' ? 'high' : 'normal',
+        category: 'ASSIGNED',
+      })
+    }
+    if (priority === 'URGENT' || priority === 'HIGH') {
+      notifyAdmins({
+        title: `${priority} ticket: #${ticket.ticketNumber}`,
+        body: `${clientLabel} — ${ticket.title}`,
+        url: ticketUrl(ticket.id),
+        priority: priority === 'URGENT' ? 'critical' : 'high',
+        category: 'NEW_HIGH',
+      })
+    }
+
     revalidatePath('/tickets')
     revalidatePath(`/clients/${clientId}`)
     redirect(`/tickets/${ticket.id}`)
@@ -136,6 +163,34 @@ export async function addComment(
         data: { isUnread: false },
       })
     })
+
+    // Notify the assignee (if it's not the author) that the ticket has
+    // new activity. Internal notes also notify — they're staff-only and
+    // the assignee may want the context.
+    const ticketInfo = await prisma.tH_Ticket.findUnique({
+      where: { id: ticketId },
+      select: {
+        ticketNumber: true,
+        title: true,
+        assignedToId: true,
+        client: { select: { name: true, shortCode: true } },
+      },
+    })
+    if (
+      ticketInfo?.assignedToId &&
+      ticketInfo.assignedToId !== userId
+    ) {
+      const clientLabel =
+        ticketInfo.client.shortCode ?? ticketInfo.client.name
+      notifyUser(ticketInfo.assignedToId, {
+        title: `${isInternal ? 'Internal note' : 'Comment'}: #${ticketInfo.ticketNumber}`,
+        body: `${clientLabel} — ${trimmed.slice(0, 120)}`,
+        url: ticketUrl(ticketId),
+        priority: 'normal',
+        category: 'COMMENT',
+      })
+    }
+
     revalidatePath(`/tickets/${ticketId}`)
     return { ok: true }
   } catch (e) {
@@ -255,6 +310,31 @@ export async function assignTicket(
         },
       })
     })
+
+    // Notify the newly-assigned tech (if it's not the person making the
+    // assignment). Fetch ticket metadata after the tx commits.
+    if (assignedToId && assignedToId !== userId) {
+      const info = await prisma.tH_Ticket.findUnique({
+        where: { id: ticketId },
+        select: {
+          ticketNumber: true,
+          title: true,
+          priority: true,
+          client: { select: { name: true, shortCode: true } },
+        },
+      })
+      if (info) {
+        const clientLabel = info.client.shortCode ?? info.client.name
+        notifyUser(assignedToId, {
+          title: `Assigned: #${info.ticketNumber}`,
+          body: `${clientLabel} — ${info.title}`,
+          url: ticketUrl(ticketId),
+          priority: info.priority === 'URGENT' ? 'high' : 'normal',
+          category: 'ASSIGNED',
+        })
+      }
+    }
+
     revalidatePath(`/tickets/${ticketId}`)
     revalidatePath('/tickets')
     return { ok: true }

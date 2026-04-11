@@ -544,6 +544,9 @@ model TH_User {
   todoistToken  String?
   pushoverToken String?
   ntfyTopic     String?
+  /// ON_CALL (all notifications), WORKING (assigned + SLA only, default),
+  /// OFF_DUTY (critical only — Pushover)
+  notificationMode String @default("WORKING")
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
