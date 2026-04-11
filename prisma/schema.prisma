@@ -617,6 +617,20 @@ model TH_KBArticle {
   @@schema("tickethub")
 }
 
+// ─── SLA POLICIES ─────────────────────────────────────────────────────────
+
+model TH_SlaPolicy {
+  id              String            @id @default(cuid())
+  priority        TH_TicketPriority @unique
+  responseMinutes Int               // time-to-first-response target
+  resolveMinutes  Int               // total time-to-resolve target
+  createdAt       DateTime          @default(now())
+  updatedAt       DateTime          @updatedAt
+
+  @@map("th_sla_policies")
+  @@schema("tickethub")
+}
+
 // ─── NOTIFICATIONS ────────────────────────────────────────────────────────
 
 model TH_Notification {

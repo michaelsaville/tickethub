@@ -1,4 +1,50 @@
-import type { TH_Ticket } from '@prisma/client'
+import type { TH_Ticket, TH_TicketPriority, TH_TicketStatus } from '@prisma/client'
+import { prisma } from '@/app/lib/prisma'
+
+/**
+ * Hard-coded fallback SLA targets. Used when no TH_SlaPolicy row exists
+ * for a given priority. Minutes.
+ */
+export const DEFAULT_POLICIES: Record<
+  TH_TicketPriority,
+  { responseMinutes: number; resolveMinutes: number }
+> = {
+  URGENT: { responseMinutes: 15, resolveMinutes: 2 * 60 },
+  HIGH: { responseMinutes: 60, resolveMinutes: 8 * 60 },
+  MEDIUM: { responseMinutes: 4 * 60, resolveMinutes: 24 * 60 },
+  LOW: { responseMinutes: 8 * 60, resolveMinutes: 72 * 60 },
+}
+
+const PAUSING_STATUSES: TH_TicketStatus[] = [
+  'WAITING_CUSTOMER',
+  'WAITING_THIRD_PARTY',
+]
+
+export function isPausingStatus(status: TH_TicketStatus): boolean {
+  return PAUSING_STATUSES.includes(status)
+}
+
+export async function resolveSlaPolicy(
+  priority: TH_TicketPriority,
+): Promise<{ responseMinutes: number; resolveMinutes: number }> {
+  const row = await prisma.tH_SlaPolicy.findUnique({
+    where: { priority },
+    select: { responseMinutes: true, resolveMinutes: true },
+  })
+  return row ?? DEFAULT_POLICIES[priority]
+}
+
+export async function computeSlaDates(
+  priority: TH_TicketPriority,
+  now: Date = new Date(),
+): Promise<{ slaResponseDue: Date; slaResolveDue: Date }> {
+  const policy = await resolveSlaPolicy(priority)
+  return {
+    slaResponseDue: new Date(now.getTime() + policy.responseMinutes * 60_000),
+    slaResolveDue: new Date(now.getTime() + policy.resolveMinutes * 60_000),
+  }
+}
+
 
 export type SlaHealth =
   | 'NO_SLA'

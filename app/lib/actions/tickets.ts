@@ -10,6 +10,7 @@ import type {
 } from '@prisma/client'
 import { prisma } from '@/app/lib/prisma'
 import { authOptions } from '@/app/lib/auth'
+import { computeSlaDates, isPausingStatus } from '@/app/lib/sla'
 
 async function getUserId(): Promise<string | null> {
   const session = await getServerSession(authOptions)
@@ -45,6 +46,8 @@ export async function createTicket(
       select: { id: true },
     })
 
+    const { slaResponseDue, slaResolveDue } = await computeSlaDates(priority)
+
     const ticket = await prisma.$transaction(async (tx) => {
       const t = await tx.tH_Ticket.create({
         data: {
@@ -57,6 +60,8 @@ export async function createTicket(
           assignedToId,
           createdById: userId,
           status: assignedToId ? 'OPEN' : 'NEW',
+          slaResponseDue,
+          slaResolveDue,
         },
       })
       await tx.tH_TicketEvent.create({
@@ -135,16 +140,50 @@ export async function updateTicketStatus(
     await prisma.$transaction(async (tx) => {
       const current = await tx.tH_Ticket.findUnique({
         where: { id: ticketId },
-        select: { status: true },
+        select: {
+          status: true,
+          slaPausedAt: true,
+          slaResolveDue: true,
+          slaResponseDue: true,
+        },
       })
       if (!current) throw new Error('Not found')
       if (current.status === status) return
+
+      const now = new Date()
+      const wasPaused = current.slaPausedAt !== null
+      const shouldBePaused = isPausingStatus(status)
+
+      // Pause transition: entering a WAITING_* status
+      let slaPausedAt: Date | null | undefined = undefined
+      let slaResolveDue: Date | null | undefined = undefined
+      let slaResponseDue: Date | null | undefined = undefined
+
+      if (!wasPaused && shouldBePaused) {
+        slaPausedAt = now
+      } else if (wasPaused && !shouldBePaused) {
+        // Resume: shift the deadlines forward by the pause duration
+        const pausedMs = now.getTime() - current.slaPausedAt!.getTime()
+        if (current.slaResolveDue) {
+          slaResolveDue = new Date(current.slaResolveDue.getTime() + pausedMs)
+        }
+        if (current.slaResponseDue) {
+          slaResponseDue = new Date(
+            current.slaResponseDue.getTime() + pausedMs,
+          )
+        }
+        slaPausedAt = null
+      }
+
       await tx.tH_Ticket.update({
         where: { id: ticketId },
         data: {
           status,
           closedAt:
-            status === 'CLOSED' || status === 'CANCELLED' ? new Date() : null,
+            status === 'CLOSED' || status === 'CANCELLED' ? now : null,
+          ...(slaPausedAt !== undefined ? { slaPausedAt } : {}),
+          ...(slaResolveDue !== undefined ? { slaResolveDue } : {}),
+          ...(slaResponseDue !== undefined ? { slaResponseDue } : {}),
         },
       })
       await tx.tH_TicketEvent.create({
@@ -152,7 +191,12 @@ export async function updateTicketStatus(
           ticketId,
           userId,
           type: 'STATUS_CHANGE',
-          data: { from: current.status, to: status },
+          data: {
+            from: current.status,
+            to: status,
+            ...(slaPausedAt === now ? { slaPaused: true } : {}),
+            ...(slaPausedAt === null && wasPaused ? { slaResumed: true } : {}),
+          },
         },
       })
     })
