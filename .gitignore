@@ -25,6 +25,7 @@ public/worker-*.js.map
 
 # Prisma
 prisma/migrations/
+.migration-preview.sql
 
 # Misc
 .DS_Store
