@@ -20,9 +20,16 @@ services:
       # Host port 3001 → container 3000. nginx reverse-proxies to :3001.
       - "3001:3000"
     env_file: .env.local
+    environment:
+      - UPLOADS_DIR=/uploads
+    volumes:
+      - tickethub_uploads:/uploads
     networks:
       - dochub_default
 
 networks:
   dochub_default:
     external: true
+
+volumes:
+  tickethub_uploads:

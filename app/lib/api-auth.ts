@@ -3,7 +3,8 @@ import { NextResponse } from 'next/server'
 import { authOptions } from '@/app/lib/auth'
 
 /**
- * Enforce authentication (and optional minimum role) for API routes.
+ * Enforce authentication (and optional minimum role) for API routes
+ * and server components that need a role gate.
  *
  *   const { session, error } = await requireAuth()
  *   if (error) return error
@@ -12,11 +13,16 @@ import { authOptions } from '@/app/lib/auth'
  *   if (error) return error
  */
 const ROLE_LEVEL: Record<string, number> = {
+  DEACTIVATED: 0,
   VIEWER: 1,
   TECH: 2,
   DISPATCHER: 3,
   TICKETHUB_ADMIN: 4,
   GLOBAL_ADMIN: 5,
+}
+
+export function hasMinRole(role: string, minRole: string): boolean {
+  return (ROLE_LEVEL[role] ?? 0) >= (ROLE_LEVEL[minRole] ?? 0)
 }
 
 export async function requireAuth(minRole?: string) {

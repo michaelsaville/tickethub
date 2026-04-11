@@ -2,7 +2,7 @@ import Link from 'next/link'
 import { redirect } from 'next/navigation'
 import { prisma } from '@/app/lib/prisma'
 import { requireAuth } from '@/app/lib/api-auth'
-import { getSlaState, slaBadgeClass } from '@/app/lib/sla'
+import { SlaBadge } from '@/app/components/SlaBadge'
 
 export const dynamic = 'force-dynamic'
 
@@ -134,37 +134,30 @@ export default async function DashboardPage() {
           </div>
         ) : (
           <ul className="divide-y divide-th-border overflow-hidden rounded-lg border border-th-border bg-th-surface">
-            {recent.map((t) => {
-              const sla = getSlaState(t, now)
-              return (
-                <li key={t.id}>
-                  <Link
-                    href={`/tickets/${t.id}`}
-                    className="flex items-center gap-3 px-4 py-3 transition-colors hover:bg-th-elevated"
+            {recent.map((t) => (
+              <li key={t.id}>
+                <Link
+                  href={`/tickets/${t.id}`}
+                  className="flex items-center gap-3 px-4 py-3 transition-colors hover:bg-th-elevated"
+                >
+                  <span className="font-mono text-xs text-th-text-muted">
+                    #{t.ticketNumber}
+                  </span>
+                  <span className="flex-1 truncate text-sm text-slate-100">
+                    {t.title}
+                  </span>
+                  <span className="w-28 truncate text-xs text-th-text-secondary">
+                    {t.client.shortCode ?? t.client.name}
+                  </span>
+                  <SlaBadge ticket={t} />
+                  <span
+                    className={`badge-status-${t.status.toLowerCase().replace(/_/g, '-')}`}
                   >
-                    <span className="font-mono text-xs text-th-text-muted">
-                      #{t.ticketNumber}
-                    </span>
-                    <span className="flex-1 truncate text-sm text-slate-100">
-                      {t.title}
-                    </span>
-                    <span className="w-28 truncate text-xs text-th-text-secondary">
-                      {t.client.shortCode ?? t.client.name}
-                    </span>
-                    {sla.health !== 'NO_SLA' && (
-                      <span className={slaBadgeClass(sla.health)}>
-                        {sla.label}
-                      </span>
-                    )}
-                    <span
-                      className={`badge-status-${t.status.toLowerCase().replace(/_/g, '-')}`}
-                    >
-                      {t.status.replace(/_/g, ' ')}
-                    </span>
-                  </Link>
-                </li>
-              )
-            })}
+                    {t.status.replace(/_/g, ' ')}
+                  </span>
+                </Link>
+              </li>
+            ))}
           </ul>
         )}
       </section>

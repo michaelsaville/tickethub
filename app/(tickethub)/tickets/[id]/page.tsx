@@ -2,9 +2,10 @@ import Link from 'next/link'
 import { notFound, redirect } from 'next/navigation'
 import { prisma } from '@/app/lib/prisma'
 import { requireAuth } from '@/app/lib/api-auth'
-import { getSlaState, slaBadgeClass } from '@/app/lib/sla'
+import { SlaBadge } from '@/app/components/SlaBadge'
 import { TicketProperties } from './TicketProperties'
 import { CommentComposer } from './CommentComposer'
+import { Attachments } from './Attachments'
 
 export const dynamic = 'force-dynamic'
 
@@ -46,6 +47,7 @@ export default async function TicketDetailPage({
       asset: true,
       assignedTo: { select: { id: true, name: true, email: true } },
       createdBy: { select: { id: true, name: true } },
+      attachments: { orderBy: { createdAt: 'desc' } },
       comments: {
         orderBy: { createdAt: 'asc' },
         include: { author: { select: { id: true, name: true } } },
@@ -71,8 +73,6 @@ export default async function TicketDetailPage({
     orderBy: { name: 'asc' },
     select: { id: true, name: true },
   })
-
-  const sla = getSlaState(ticket)
 
   type TimelineEntry =
     | { kind: 'comment'; at: Date; data: (typeof ticket.comments)[number] }
@@ -170,7 +170,7 @@ export default async function TicketDetailPage({
                   SLA
                 </dt>
                 <dd className="mt-1">
-                  <span className={slaBadgeClass(sla.health)}>{sla.label}</span>
+                  <SlaBadge ticket={ticket} />
                 </dd>
               </div>
             )}
@@ -215,6 +215,17 @@ export default async function TicketDetailPage({
               </ol>
             )}
           </div>
+
+          <Attachments
+            ticketId={ticket.id}
+            initial={ticket.attachments.map((a) => ({
+              id: a.id,
+              filename: a.filename,
+              mimeType: a.mimeType,
+              sizeBytes: a.sizeBytes,
+              createdAt: a.createdAt,
+            }))}
+          />
 
           <CommentComposer ticketId={ticket.id} />
         </div>

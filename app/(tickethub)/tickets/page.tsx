@@ -3,7 +3,7 @@ import { redirect } from 'next/navigation'
 import type { Prisma } from '@prisma/client'
 import { prisma } from '@/app/lib/prisma'
 import { requireAuth } from '@/app/lib/api-auth'
-import { getSlaState, slaBadgeClass } from '@/app/lib/sla'
+import { SlaBadge } from '@/app/components/SlaBadge'
 import { TicketFilters } from './TicketFilters'
 
 export const dynamic = 'force-dynamic'
@@ -55,7 +55,6 @@ export default async function TicketsPage({
     }),
   ])
 
-  const now = new Date()
   const title =
     sp.view === 'mine'
       ? 'My Queue'
@@ -106,7 +105,6 @@ export default async function TicketsPage({
             </thead>
             <tbody className="divide-y divide-th-border bg-th-surface">
               {tickets.map((t) => {
-                const sla = getSlaState(t, now)
                 return (
                   <tr
                     key={t.id}
@@ -157,13 +155,7 @@ export default async function TicketsPage({
                       )}
                     </td>
                     <td className="px-3 py-2">
-                      {sla.health === 'NO_SLA' ? (
-                        <span className="text-xs text-th-text-muted">—</span>
-                      ) : (
-                        <span className={slaBadgeClass(sla.health)}>
-                          {sla.label}
-                        </span>
-                      )}
+                      <SlaBadge ticket={t} />
                     </td>
                     <td className="px-3 py-2">
                       <span className={statusBadgeClass(t.status)}>
@@ -171,7 +163,7 @@ export default async function TicketsPage({
                       </span>
                     </td>
                     <td className="px-3 py-2 text-right font-mono text-[10px] text-th-text-muted">
-                      {formatRelative(t.updatedAt, now)}
+                      {formatRelative(t.updatedAt, new Date())}
                     </td>
                   </tr>
                 )

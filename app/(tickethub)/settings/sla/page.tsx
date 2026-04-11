@@ -2,7 +2,7 @@ import Link from 'next/link'
 import { redirect } from 'next/navigation'
 import type { TH_TicketPriority } from '@prisma/client'
 import { prisma } from '@/app/lib/prisma'
-import { requireAuth } from '@/app/lib/api-auth'
+import { hasMinRole, requireAuth } from '@/app/lib/api-auth'
 import { DEFAULT_POLICIES } from '@/app/lib/sla'
 import { SlaPoliciesForm } from './SlaPoliciesForm'
 
@@ -11,8 +11,18 @@ export const dynamic = 'force-dynamic'
 const PRIORITIES: TH_TicketPriority[] = ['URGENT', 'HIGH', 'MEDIUM', 'LOW']
 
 export default async function SlaSettingsPage() {
-  const { error } = await requireAuth()
+  const { session, error } = await requireAuth()
   if (error) redirect('/api/auth/signin')
+  if (!hasMinRole(session!.user.role, 'TICKETHUB_ADMIN')) {
+    return (
+      <div className="p-6">
+        <h1 className="font-mono text-2xl text-slate-100">SLA Policies</h1>
+        <p className="mt-2 text-sm text-priority-urgent">
+          Admin role required.
+        </p>
+      </div>
+    )
+  }
 
   const rows = await prisma.tH_SlaPolicy.findMany()
   const byPriority = new Map(rows.map((r) => [r.priority, r]))

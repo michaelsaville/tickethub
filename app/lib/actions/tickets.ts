@@ -10,7 +10,8 @@ import type {
 } from '@prisma/client'
 import { prisma } from '@/app/lib/prisma'
 import { authOptions } from '@/app/lib/auth'
-import { computeSlaDates, isPausingStatus } from '@/app/lib/sla'
+import { isPausingStatus } from '@/app/lib/sla'
+import { computeSlaDates } from '@/app/lib/sla-server'
 
 async function getUserId(): Promise<string | null> {
   const session = await getServerSession(authOptions)

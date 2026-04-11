@@ -15,6 +15,16 @@ const GROUPS = [
       },
     ],
   },
+  {
+    title: 'People',
+    items: [
+      {
+        href: '/settings/users',
+        title: 'Users',
+        description: 'Roles, hourly rates, activation',
+      },
+    ],
+  },
 ] as const
 
 export default async function SettingsPage() {

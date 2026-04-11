@@ -1,10 +1,29 @@
-import type { TH_Ticket, TH_TicketPriority, TH_TicketStatus } from '@prisma/client'
-import { prisma } from '@/app/lib/prisma'
+import type { TH_TicketPriority, TH_TicketStatus } from '@prisma/client'
 
-/**
- * Hard-coded fallback SLA targets. Used when no TH_SlaPolicy row exists
- * for a given priority. Minutes.
- */
+// Client-safe SLA helpers. No prisma import so this module can be pulled
+// into client components. DB-touching helpers live in ./sla-server.ts.
+
+export type SlaHealth =
+  | 'NO_SLA'
+  | 'ON_TRACK'
+  | 'AT_RISK'
+  | 'CRITICAL'
+  | 'BREACHED'
+  | 'PAUSED'
+
+export interface SlaState {
+  health: SlaHealth
+  remainingMs: number | null
+  label: string
+}
+
+export type SlaTicketInput = {
+  slaResolveDue: Date | string | null
+  slaPausedAt: Date | string | null
+  slaBreached: boolean
+  createdAt: Date | string
+}
+
 export const DEFAULT_POLICIES: Record<
   TH_TicketPriority,
   { responseMinutes: number; resolveMinutes: number }
@@ -24,67 +43,23 @@ export function isPausingStatus(status: TH_TicketStatus): boolean {
   return PAUSING_STATUSES.includes(status)
 }
 
-export async function resolveSlaPolicy(
-  priority: TH_TicketPriority,
-): Promise<{ responseMinutes: number; resolveMinutes: number }> {
-  const row = await prisma.tH_SlaPolicy.findUnique({
-    where: { priority },
-    select: { responseMinutes: true, resolveMinutes: true },
-  })
-  return row ?? DEFAULT_POLICIES[priority]
+function toDate(v: Date | string | null): Date | null {
+  if (v === null) return null
+  return v instanceof Date ? v : new Date(v)
 }
 
-export async function computeSlaDates(
-  priority: TH_TicketPriority,
+export function getSlaState(
+  ticket: SlaTicketInput,
   now: Date = new Date(),
-): Promise<{ slaResponseDue: Date; slaResolveDue: Date }> {
-  const policy = await resolveSlaPolicy(priority)
-  return {
-    slaResponseDue: new Date(now.getTime() + policy.responseMinutes * 60_000),
-    slaResolveDue: new Date(now.getTime() + policy.resolveMinutes * 60_000),
-  }
-}
-
-
-export type SlaHealth =
-  | 'NO_SLA'
-  | 'ON_TRACK'
-  | 'AT_RISK'
-  | 'CRITICAL'
-  | 'BREACHED'
-  | 'PAUSED'
-
-export interface SlaState {
-  health: SlaHealth
-  /** Milliseconds until resolveDue. Negative when breached. */
-  remainingMs: number | null
-  /** Short human label e.g. "2d 14h", "3h 20m", "-2h 30m", "PAUSED". */
-  label: string
-}
-
-type SlaInput = Pick<
-  TH_Ticket,
-  'slaResolveDue' | 'slaPausedAt' | 'slaBreached' | 'createdAt'
->
-
-/**
- * Derive SLA health from a ticket's SLA fields and current time.
- * Thresholds from PLANNING.md §12:
- *   50% elapsed → AT_RISK
- *   90% elapsed → CRITICAL
- *   100%+       → BREACHED
- */
-export function getSlaState(ticket: SlaInput, now: Date = new Date()): SlaState {
+): SlaState {
   if (ticket.slaPausedAt) {
     return { health: 'PAUSED', remainingMs: null, label: 'PAUSED' }
   }
-  if (!ticket.slaResolveDue) {
-    return { health: 'NO_SLA', remainingMs: null, label: '—' }
-  }
+  const due = toDate(ticket.slaResolveDue)
+  if (!due) return { health: 'NO_SLA', remainingMs: null, label: '—' }
 
-  const due = ticket.slaResolveDue.getTime()
   const nowMs = now.getTime()
-  const remainingMs = due - nowMs
+  const remainingMs = due.getTime() - nowMs
 
   if (remainingMs < 0 || ticket.slaBreached) {
     return {
@@ -94,8 +69,8 @@ export function getSlaState(ticket: SlaInput, now: Date = new Date()): SlaState 
     }
   }
 
-  const start = ticket.createdAt.getTime()
-  const total = due - start
+  const start = toDate(ticket.createdAt)!.getTime()
+  const total = due.getTime() - start
   const elapsed = nowMs - start
   const pct = total > 0 ? elapsed / total : 0
 
@@ -116,7 +91,6 @@ export function slaBadgeClass(health: SlaHealth): string {
     case 'BREACHED':
       return 'badge-sla-breached'
     case 'PAUSED':
-      return 'badge-sla-paused'
     case 'NO_SLA':
       return 'badge-sla-paused'
   }

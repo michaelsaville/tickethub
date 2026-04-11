@@ -16,8 +16,9 @@ export async function upsertSlaPolicies(
 ): Promise<SlaPolicyResult> {
   const session = await getServerSession(authOptions)
   if (!session?.user?.id) return { ok: false, error: 'Unauthorized' }
-  // Relaxed in dev: in production gate on role once admins are promoted.
-  void ADMIN_ROLES
+  if (!ADMIN_ROLES.has(session.user.role)) {
+    return { ok: false, error: 'Admin role required' }
+  }
 
   const priorities: TH_TicketPriority[] = ['URGENT', 'HIGH', 'MEDIUM', 'LOW']
 

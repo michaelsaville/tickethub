@@ -45,13 +45,20 @@ export const authOptions: NextAuthOptions = {
       }
     },
     async jwt({ token, user }) {
-      if (user?.email) {
+      // On initial sign-in, `user` has the email. On subsequent requests,
+      // only `token` is set — refresh id + role from DB every time so
+      // admin promotions / demotions / deactivation take effect without
+      // requiring sign-out/sign-in.
+      const email = user?.email ?? (token.email as string | undefined)
+      if (email) {
         const dbUser = await prisma.tH_User.findUnique({
-          where: { email: user.email },
+          where: { email },
+          select: { id: true, role: true, isActive: true },
         })
         if (dbUser) {
           token.id = dbUser.id
           token.role = dbUser.role
+          if (!dbUser.isActive) token.role = 'DEACTIVATED'
         }
       }
       return token
