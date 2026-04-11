@@ -1,0 +1,14 @@
+node_modules
+.next
+.git
+.github
+.env
+.env.local
+.env.*.local
+.migration-preview.sql
+.vscode
+.idea
+*.log
+README.md
+PLANNING.md
+claude.md
