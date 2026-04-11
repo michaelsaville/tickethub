@@ -5,12 +5,17 @@
 // All monetary values stored as integers (cents).
 
 generator client {
-  provider = "prisma-client-js"
+  provider        = "prisma-client-js"
+  previewFeatures = ["multiSchema"]
 }
 
 datasource db {
   provider = "postgresql"
   url      = env("DATABASE_URL")
+  // Isolate TicketHub in its own Postgres schema so db push never touches
+  // DocHub's public schema. Both apps share the same database/role, but
+  // Prisma's drift detection only manages tables in schemas it knows about.
+  schemas  = ["tickethub"]
 }
 
 // ─── CLIENTS ──────────────────────────────────────────────────────────────
@@ -32,6 +37,7 @@ model TH_Client {
   invoices  TH_Invoice[]
 
   @@map("th_clients")
+  @@schema("tickethub")
 }
 
 model TH_Contact {
@@ -51,6 +57,7 @@ model TH_Contact {
   tickets TH_Ticket[]
 
   @@map("th_contacts")
+  @@schema("tickethub")
 }
 
 model TH_Site {
@@ -70,6 +77,7 @@ model TH_Site {
   tickets TH_Ticket[]
 
   @@map("th_sites")
+  @@schema("tickethub")
 }
 
 // ─── CONTRACTS ────────────────────────────────────────────────────────────
@@ -80,6 +88,7 @@ enum TH_ContractType {
   RECURRING
   TIME_AND_MATERIAL
   PROJECT
+  @@schema("tickethub")
 }
 
 enum TH_ContractStatus {
@@ -87,6 +96,7 @@ enum TH_ContractStatus {
   EXPIRED
   CANCELLED
   PENDING
+  @@schema("tickethub")
 }
 
 model TH_Contract {
@@ -111,6 +121,7 @@ model TH_Contract {
   tickets         TH_Ticket[]
 
   @@map("th_contracts")
+  @@schema("tickethub")
 }
 
 model TH_ContractPriceException {
@@ -123,6 +134,7 @@ model TH_ContractPriceException {
   createdAt     DateTime    @default(now())
 
   @@map("th_contract_price_exceptions")
+  @@schema("tickethub")
 }
 
 // ─── ITEMS (CATALOG) ──────────────────────────────────────────────────────
@@ -133,6 +145,7 @@ enum TH_ItemType {
   EXPENSE
   LICENSE
   CONTRACT_FEE
+  @@schema("tickethub")
 }
 
 model TH_Item {
@@ -152,6 +165,7 @@ model TH_Item {
   priceExceptions TH_ContractPriceException[]
 
   @@map("th_items")
+  @@schema("tickethub")
 }
 
 // ─── CHARGES (THE BILLING BACKBONE) ───────────────────────────────────────
@@ -161,6 +175,7 @@ enum TH_ChargeStatus {
   BILLABLE
   INVOICED
   LOCKED
+  @@schema("tickethub")
 }
 
 enum TH_ChargeType {
@@ -168,6 +183,7 @@ enum TH_ChargeType {
   PART
   EXPENSE
   CONTRACT_FEE
+  @@schema("tickethub")
 }
 
 model TH_Charge {
@@ -206,6 +222,7 @@ model TH_Charge {
   ticketPart  TH_TicketPart?
 
   @@map("th_charges")
+  @@schema("tickethub")
 }
 
 // ─── TICKETS ──────────────────────────────────────────────────────────────
@@ -219,6 +236,7 @@ enum TH_TicketStatus {
   RESOLVED
   CLOSED
   CANCELLED
+  @@schema("tickethub")
 }
 
 enum TH_TicketPriority {
@@ -226,6 +244,7 @@ enum TH_TicketPriority {
   HIGH
   MEDIUM
   LOW
+  @@schema("tickethub")
 }
 
 enum TH_TicketType {
@@ -235,6 +254,7 @@ enum TH_TicketType {
   CHANGE
   MAINTENANCE
   INTERNAL
+  @@schema("tickethub")
 }
 
 model TH_Ticket {
@@ -289,6 +309,7 @@ model TH_Ticket {
   appointments TH_Appointment[]
 
   @@map("th_tickets")
+  @@schema("tickethub")
 }
 
 model TH_TicketComment {
@@ -303,6 +324,7 @@ model TH_TicketComment {
   updatedAt  DateTime  @updatedAt
 
   @@map("th_ticket_comments")
+  @@schema("tickethub")
 }
 
 model TH_TicketEvent {
@@ -316,6 +338,7 @@ model TH_TicketEvent {
   createdAt DateTime  @default(now())
 
   @@map("th_ticket_events")
+  @@schema("tickethub")
 }
 
 model TH_TicketTag {
@@ -326,6 +349,7 @@ model TH_TicketTag {
 
   @@unique([ticketId, tag])
   @@map("th_ticket_tags")
+  @@schema("tickethub")
 }
 
 // ─── PARTS (PROCUREMENT) ──────────────────────────────────────────────────
@@ -336,6 +360,7 @@ enum TH_PartStatus {
   RECEIVED
   INSTALLED
   RETURNED
+  @@schema("tickethub")
 }
 
 model TH_TicketPart {
@@ -366,6 +391,7 @@ model TH_TicketPart {
   updatedAt DateTime @updatedAt
 
   @@map("th_ticket_parts")
+  @@schema("tickethub")
 }
 
 // ─── ASSETS ───────────────────────────────────────────────────────────────
@@ -388,6 +414,7 @@ model TH_Asset {
   tickets TH_Ticket[]
 
   @@map("th_assets")
+  @@schema("tickethub")
 }
 
 // ─── INVOICES ─────────────────────────────────────────────────────────────
@@ -399,6 +426,7 @@ enum TH_InvoiceStatus {
   PAID
   OVERDUE
   VOID
+  @@schema("tickethub")
 }
 
 model TH_Invoice {
@@ -430,6 +458,7 @@ model TH_Invoice {
   attachments TH_Attachment[]
 
   @@map("th_invoices")
+  @@schema("tickethub")
 }
 
 // ─── FUEL RECEIPTS ────────────────────────────────────────────────────────
@@ -461,6 +490,7 @@ model TH_FuelReceipt {
   updatedAt DateTime @updatedAt
 
   @@map("th_fuel_receipts")
+  @@schema("tickethub")
 }
 
 // ─── SCHEDULING ───────────────────────────────────────────────────────────
@@ -484,6 +514,7 @@ model TH_Appointment {
   updatedAt DateTime @updatedAt
 
   @@map("th_appointments")
+  @@schema("tickethub")
 }
 
 // ─── USERS ────────────────────────────────────────────────────────────────
@@ -515,6 +546,7 @@ model TH_User {
   parts           TH_TicketPart[]
 
   @@map("th_users")
+  @@schema("tickethub")
 }
 
 // ─── ATTACHMENTS & SIGNATURES ─────────────────────────────────────────────
@@ -533,6 +565,7 @@ model TH_Attachment {
   createdAt    DateTime    @default(now())
 
   @@map("th_attachments")
+  @@schema("tickethub")
 }
 
 model TH_Signature {
@@ -546,6 +579,7 @@ model TH_Signature {
   createdAt    DateTime  @default(now())
 
   @@map("th_signatures")
+  @@schema("tickethub")
 }
 
 // ─── OFFLINE SYNC QUEUE ───────────────────────────────────────────────────
@@ -564,6 +598,7 @@ model TH_SyncQueue {
   syncedAt   DateTime?
 
   @@map("th_sync_queue")
+  @@schema("tickethub")
 }
 
 // ─── KNOWLEDGE BASE ───────────────────────────────────────────────────────
@@ -580,6 +615,7 @@ model TH_KBArticle {
   updatedAt      DateTime @updatedAt
 
   @@map("th_kb_articles")
+  @@schema("tickethub")
 }
 
 // ─── NOTIFICATIONS ────────────────────────────────────────────────────────
@@ -596,4 +632,5 @@ model TH_Notification {
   readAt    DateTime?
 
   @@map("th_notifications")
+  @@schema("tickethub")
 }
