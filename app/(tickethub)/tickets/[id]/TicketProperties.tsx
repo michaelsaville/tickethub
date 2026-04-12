@@ -1,17 +1,13 @@
 'use client'
 
 import { useState, useTransition } from 'react'
+import { useRouter } from 'next/navigation'
 import type {
   TH_TicketPriority,
   TH_TicketStatus,
   TH_TicketType,
 } from '@prisma/client'
-import {
-  assignTicket,
-  updateTicketContract,
-  updateTicketPriority,
-  updateTicketStatus,
-} from '@/app/lib/actions/tickets'
+import { enqueueRequest, type EnqueueInput } from '@/app/lib/sync-queue'
 
 const STATUSES: TH_TicketStatus[] = [
   'NEW',
@@ -44,19 +40,92 @@ export function TicketProperties({
   techs: Array<{ id: string; name: string }>
   contracts: Array<{ id: string; name: string; type: string; isGlobal: boolean }>
 }) {
+  const router = useRouter()
   const [status, setStatus] = useState(initialStatus)
   const [priority, setPriority] = useState(initialPriority)
   const [assignedToId, setAssignedToId] = useState(initialAssignedToId ?? '')
   const [contractId, setContractId] = useState(initialContractId ?? '')
   const [isPending, startTransition] = useTransition()
   const [err, setErr] = useState<string | null>(null)
+  const [queuedMsg, setQueuedMsg] = useState<string | null>(null)
 
-  function wrap<T>(fn: () => Promise<{ ok: boolean; error?: string }>) {
+  function patch(
+    input: Omit<EnqueueInput, 'method'>,
+    label: string,
+    rollback: () => void,
+  ) {
     setErr(null)
+    setQueuedMsg(null)
     startTransition(async () => {
-      const res = await fn()
-      if (!res.ok && res.error) setErr(res.error)
+      try {
+        const res = await enqueueRequest({ ...input, method: 'PATCH' })
+        if (res.synced) router.refresh()
+        else setQueuedMsg(`Offline — ${label} queued.`)
+      } catch (e) {
+        setErr(e instanceof Error ? e.message : 'Failed')
+        rollback()
+      }
     })
+  }
+
+  function changeStatus(v: TH_TicketStatus) {
+    setStatus(v)
+    patch(
+      {
+        type: 'UPDATE_STATUS',
+        entityType: 'TICKET',
+        entityId: ticketId,
+        url: `/api/tickets/${ticketId}/status`,
+        body: { status: v },
+      },
+      'status change',
+      () => setStatus(initialStatus),
+    )
+  }
+
+  function changePriority(v: TH_TicketPriority) {
+    setPriority(v)
+    patch(
+      {
+        type: 'UPDATE_PRIORITY',
+        entityType: 'TICKET',
+        entityId: ticketId,
+        url: `/api/tickets/${ticketId}/priority`,
+        body: { priority: v },
+      },
+      'priority change',
+      () => setPriority(initialPriority),
+    )
+  }
+
+  function changeAssignee(v: string) {
+    setAssignedToId(v)
+    patch(
+      {
+        type: 'UPDATE_ASSIGNEE',
+        entityType: 'TICKET',
+        entityId: ticketId,
+        url: `/api/tickets/${ticketId}/assignee`,
+        body: { assignedToId: v || null },
+      },
+      'assignee change',
+      () => setAssignedToId(initialAssignedToId ?? ''),
+    )
+  }
+
+  function changeContract(v: string) {
+    setContractId(v)
+    patch(
+      {
+        type: 'UPDATE_CONTRACT',
+        entityType: 'TICKET',
+        entityId: ticketId,
+        url: `/api/tickets/${ticketId}/contract`,
+        body: { contractId: v || null },
+      },
+      'contract change',
+      () => setContractId(initialContractId ?? ''),
+    )
   }
 
   return (
@@ -68,11 +137,7 @@ export function TicketProperties({
         <select
           value={status}
           disabled={isPending}
-          onChange={(e) => {
-            const v = e.target.value as TH_TicketStatus
-            setStatus(v)
-            wrap(() => updateTicketStatus(ticketId, v))
-          }}
+          onChange={(e) => changeStatus(e.target.value as TH_TicketStatus)}
           className="th-input"
         >
           {STATUSES.map((s) => (
@@ -90,11 +155,7 @@ export function TicketProperties({
         <select
           value={priority}
           disabled={isPending}
-          onChange={(e) => {
-            const v = e.target.value as TH_TicketPriority
-            setPriority(v)
-            wrap(() => updateTicketPriority(ticketId, v))
-          }}
+          onChange={(e) => changePriority(e.target.value as TH_TicketPriority)}
           className="th-input"
         >
           {PRIORITIES.map((p) => (
@@ -112,11 +173,7 @@ export function TicketProperties({
         <select
           value={assignedToId}
           disabled={isPending}
-          onChange={(e) => {
-            const v = e.target.value
-            setAssignedToId(v)
-            wrap(() => assignTicket(ticketId, v || null))
-          }}
+          onChange={(e) => changeAssignee(e.target.value)}
           className="th-input"
         >
           <option value="">Unassigned</option>
@@ -136,11 +193,7 @@ export function TicketProperties({
           <select
             value={contractId}
             disabled={isPending}
-            onChange={(e) => {
-              const v = e.target.value
-              setContractId(v)
-              wrap(() => updateTicketContract(ticketId, v || null))
-            }}
+            onChange={(e) => changeContract(e.target.value)}
             className="th-input"
           >
             <option value="">None</option>
@@ -166,6 +219,11 @@ export function TicketProperties({
       {err && (
         <div className="rounded-md border border-priority-urgent/40 bg-priority-urgent/10 px-2 py-1 text-xs text-priority-urgent">
           {err}
+        </div>
+      )}
+      {queuedMsg && (
+        <div className="rounded-md border border-amber-500/40 bg-amber-500/10 px-2 py-1 text-xs text-amber-300">
+          {queuedMsg}
         </div>
       )}
     </div>

@@ -28,10 +28,20 @@ export async function createSignature(
     dataUrl: string
     gpsLat?: number
     gpsLng?: number
+    clientOpId?: string | null
+    overrideUserId?: string
   },
 ): Promise<SignatureResult> {
-  const userId = await getUserId()
+  const userId = input.overrideUserId ?? (await getUserId())
   if (!userId) return { ok: false, error: 'Unauthorized' }
+
+  if (input.clientOpId) {
+    const existing = await prisma.tH_Signature.findUnique({
+      where: { clientOpId: input.clientOpId },
+      select: { id: true },
+    })
+    if (existing) return { ok: true }
+  }
 
   const name = input.signedByName?.trim()
   if (!name) return { ok: false, error: 'Signer name required' }
@@ -63,6 +73,7 @@ export async function createSignature(
           signatureUrl: relativePath,
           gpsLat: input.gpsLat ?? null,
           gpsLng: input.gpsLng ?? null,
+          clientOpId: input.clientOpId ?? null,
         },
       })
       await tx.tH_TicketEvent.create({

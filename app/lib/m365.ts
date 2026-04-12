@@ -43,7 +43,7 @@ export function senderUpn(): string {
   return process.env.M365_SENDER_UPN ?? ''
 }
 
-async function getAppOnlyToken(): Promise<string> {
+export async function getAppOnlyToken(): Promise<string> {
   if (cachedToken && cachedToken.expiresAt > Date.now() + 60_000) {
     return cachedToken.accessToken
   }
@@ -82,6 +82,34 @@ async function getAppOnlyToken(): Promise<string> {
     expiresAt: Date.now() + json.expires_in * 1000,
   }
   return json.access_token
+}
+
+/**
+ * Generic authenticated Graph call. Path is appended to the v1.0 base.
+ * Throws on non-2xx.
+ */
+export async function graphFetch(
+  path: string,
+  init: { method?: string; body?: unknown; headers?: Record<string, string> } = {},
+): Promise<Response> {
+  const token = await getAppOnlyToken()
+  const url = path.startsWith('http')
+    ? path
+    : `https://graph.microsoft.com/v1.0${path.startsWith('/') ? path : `/${path}`}`
+  const headers: Record<string, string> = {
+    Authorization: `Bearer ${token}`,
+    ...(init.headers ?? {}),
+  }
+  let body: BodyInit | undefined
+  if (init.body !== undefined) {
+    headers['Content-Type'] ??= 'application/json'
+    body = typeof init.body === 'string' ? init.body : JSON.stringify(init.body)
+  }
+  return fetch(url, {
+    method: init.method ?? 'GET',
+    headers,
+    body,
+  })
 }
 
 export interface MailAttachment {

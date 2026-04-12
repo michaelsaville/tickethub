@@ -10,9 +10,11 @@ import type {
 } from '@prisma/client'
 import { prisma } from '@/app/lib/prisma'
 import { authOptions } from '@/app/lib/auth'
-import { isPausingStatus } from '@/app/lib/sla'
 import { computeSlaDates } from '@/app/lib/sla-server'
 import { notifyAdmins, notifyUser, ticketUrl } from '@/app/lib/notify-server'
+import { createComment } from '@/app/lib/comments-core'
+import { updateTicketStatusCore } from '@/app/lib/tickets-core'
+import { sendTicketClientEmail } from '@/app/lib/ticket-email'
 
 async function getUserId(): Promise<string | null> {
   const session = await getServerSession(authOptions)
@@ -125,6 +127,12 @@ export async function createTicket(
       })
     }
 
+    void sendTicketClientEmail({
+      ticketId: ticket.id,
+      mode: 'NEW_TICKET',
+      messageText: description ?? ticket.title,
+    })
+
     revalidatePath('/tickets')
     revalidatePath(`/clients/${clientId}`)
     redirect(`/tickets/${ticket.id}`)
@@ -142,61 +150,18 @@ export async function addComment(
 ): Promise<{ ok: boolean; error?: string }> {
   const userId = await getUserId()
   if (!userId) return { ok: false, error: 'Unauthorized' }
-  const trimmed = body.trim()
-  if (!trimmed) return { ok: false, error: 'Comment is empty' }
-
-  try {
-    await prisma.$transaction(async (tx) => {
-      await tx.tH_TicketComment.create({
-        data: { ticketId, authorId: userId, body: trimmed, isInternal },
-      })
-      await tx.tH_TicketEvent.create({
-        data: {
-          ticketId,
-          userId,
-          type: isInternal ? 'INTERNAL_NOTE' : 'COMMENT',
-        },
-      })
-      // A staff comment clears the unread flag
-      await tx.tH_Ticket.update({
-        where: { id: ticketId },
-        data: { isUnread: false },
-      })
-    })
-
-    // Notify the assignee (if it's not the author) that the ticket has
-    // new activity. Internal notes also notify — they're staff-only and
-    // the assignee may want the context.
-    const ticketInfo = await prisma.tH_Ticket.findUnique({
-      where: { id: ticketId },
-      select: {
-        ticketNumber: true,
-        title: true,
-        assignedToId: true,
-        client: { select: { name: true, shortCode: true } },
-      },
-    })
-    if (
-      ticketInfo?.assignedToId &&
-      ticketInfo.assignedToId !== userId
-    ) {
-      const clientLabel =
-        ticketInfo.client.shortCode ?? ticketInfo.client.name
-      notifyUser(ticketInfo.assignedToId, {
-        title: `${isInternal ? 'Internal note' : 'Comment'}: #${ticketInfo.ticketNumber}`,
-        body: `${clientLabel} — ${trimmed.slice(0, 120)}`,
-        url: ticketUrl(ticketId),
-        priority: 'normal',
-        category: 'COMMENT',
+  const res = await createComment(userId, ticketId, body, isInternal)
+  if (res.ok) {
+    revalidatePath(`/tickets/${ticketId}`)
+    if (!isInternal) {
+      void sendTicketClientEmail({
+        ticketId,
+        mode: 'STAFF_REPLY',
+        messageText: body,
       })
     }
-
-    revalidatePath(`/tickets/${ticketId}`)
-    return { ok: true }
-  } catch (e) {
-    console.error('[actions/tickets] addComment failed', e)
-    return { ok: false, error: 'Failed to add comment' }
   }
+  return res
 }
 
 export async function updateTicketStatus(
@@ -205,77 +170,12 @@ export async function updateTicketStatus(
 ): Promise<{ ok: boolean; error?: string }> {
   const userId = await getUserId()
   if (!userId) return { ok: false, error: 'Unauthorized' }
-  try {
-    await prisma.$transaction(async (tx) => {
-      const current = await tx.tH_Ticket.findUnique({
-        where: { id: ticketId },
-        select: {
-          status: true,
-          slaPausedAt: true,
-          slaResolveDue: true,
-          slaResponseDue: true,
-        },
-      })
-      if (!current) throw new Error('Not found')
-      if (current.status === status) return
-
-      const now = new Date()
-      const wasPaused = current.slaPausedAt !== null
-      const shouldBePaused = isPausingStatus(status)
-
-      // Pause transition: entering a WAITING_* status
-      let slaPausedAt: Date | null | undefined = undefined
-      let slaResolveDue: Date | null | undefined = undefined
-      let slaResponseDue: Date | null | undefined = undefined
-
-      if (!wasPaused && shouldBePaused) {
-        slaPausedAt = now
-      } else if (wasPaused && !shouldBePaused) {
-        // Resume: shift the deadlines forward by the pause duration
-        const pausedMs = now.getTime() - current.slaPausedAt!.getTime()
-        if (current.slaResolveDue) {
-          slaResolveDue = new Date(current.slaResolveDue.getTime() + pausedMs)
-        }
-        if (current.slaResponseDue) {
-          slaResponseDue = new Date(
-            current.slaResponseDue.getTime() + pausedMs,
-          )
-        }
-        slaPausedAt = null
-      }
-
-      await tx.tH_Ticket.update({
-        where: { id: ticketId },
-        data: {
-          status,
-          closedAt:
-            status === 'CLOSED' || status === 'CANCELLED' ? now : null,
-          ...(slaPausedAt !== undefined ? { slaPausedAt } : {}),
-          ...(slaResolveDue !== undefined ? { slaResolveDue } : {}),
-          ...(slaResponseDue !== undefined ? { slaResponseDue } : {}),
-        },
-      })
-      await tx.tH_TicketEvent.create({
-        data: {
-          ticketId,
-          userId,
-          type: 'STATUS_CHANGE',
-          data: {
-            from: current.status,
-            to: status,
-            ...(slaPausedAt === now ? { slaPaused: true } : {}),
-            ...(slaPausedAt === null && wasPaused ? { slaResumed: true } : {}),
-          },
-        },
-      })
-    })
+  const res = await updateTicketStatusCore(userId, ticketId, status)
+  if (res.ok) {
     revalidatePath(`/tickets/${ticketId}`)
     revalidatePath('/tickets')
-    return { ok: true }
-  } catch (e) {
-    console.error('[actions/tickets] updateStatus failed', e)
-    return { ok: false, error: 'Failed to update status' }
   }
+  return res
 }
 
 export async function assignTicket(

@@ -2,6 +2,26 @@
 
 import { useState, useTransition, type ChangeEvent } from 'react'
 import { useRouter } from 'next/navigation'
+import { enqueueRequest } from '@/app/lib/sync-queue'
+
+const MAX_QUEUE_SIZE = 8 * 1024 * 1024 // 8 MB — IndexedDB base64 safety cap
+
+function fileToBase64(file: File): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader()
+    reader.onerror = () => reject(reader.error ?? new Error('read failed'))
+    reader.onload = () => {
+      const result = reader.result
+      if (typeof result !== 'string') {
+        reject(new Error('unexpected reader result'))
+        return
+      }
+      const comma = result.indexOf(',')
+      resolve(comma >= 0 ? result.slice(comma + 1) : result)
+    }
+    reader.readAsDataURL(file)
+  })
+}
 
 type Attachment = {
   id: string
@@ -30,29 +50,54 @@ export function Attachments({
     setErr(null)
     setUploading(true)
     try {
-      const fd = new FormData()
-      fd.append('file', file)
-      const res = await fetch(`/api/tickets/${ticketId}/attachments`, {
-        method: 'POST',
-        body: fd,
-      })
-      const ct = res.headers.get('content-type') ?? ''
-      if (!ct.includes('application/json')) {
-        // nginx 413, proxy error, etc. — response body is HTML/text.
-        if (res.status === 413) {
-          setErr('File too large for the server (nginx 1MB limit?)')
-        } else {
-          setErr(`Upload failed: HTTP ${res.status}`)
+      // Files larger than the queue cap go straight through multipart —
+      // base64 in IndexedDB balloons ~33% and blows the quota. Those
+      // uploads still fail offline, but at least they don't crash Dexie.
+      if (file.size > MAX_QUEUE_SIZE) {
+        const fd = new FormData()
+        fd.append('file', file)
+        const res = await fetch(`/api/tickets/${ticketId}/attachments`, {
+          method: 'POST',
+          body: fd,
+        })
+        const ct = res.headers.get('content-type') ?? ''
+        if (!ct.includes('application/json')) {
+          setErr(
+            res.status === 413
+              ? 'File too large for the server (nginx limit?)'
+              : `Upload failed: HTTP ${res.status}`,
+          )
+          return
         }
+        const json = await res.json()
+        if (!res.ok || json.error) {
+          setErr(json.error ?? `Upload failed (${res.status})`)
+          return
+        }
+        setItems((xs) => [...xs, json.data])
+        router.refresh()
         return
       }
-      const json = await res.json()
-      if (!res.ok || json.error) {
-        setErr(json.error ?? `Upload failed (${res.status})`)
-        return
+
+      const base64 = await fileToBase64(file)
+      const result = await enqueueRequest({
+        type: 'ATTACH_PHOTO',
+        entityType: 'TICKET',
+        entityId: ticketId,
+        url: `/api/tickets/${ticketId}/attachments`,
+        body: {
+          filename: file.name || 'upload.bin',
+          mimeType: file.type || 'application/octet-stream',
+          base64,
+        },
+      })
+      if (result.synced) {
+        const data = (result.response as { data?: Attachment })?.data
+        if (data) setItems((xs) => [...xs, data])
+        router.refresh()
+      } else {
+        setErr('Offline — upload queued, will sync when online.')
       }
-      setItems((xs) => [...xs, json.data])
-      router.refresh()
     } catch (ex) {
       setErr(ex instanceof Error ? ex.message : 'Upload failed')
     } finally {

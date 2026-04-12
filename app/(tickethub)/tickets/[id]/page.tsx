@@ -7,11 +7,13 @@ import { TicketProperties } from './TicketProperties'
 import { CommentComposer } from './CommentComposer'
 import { Attachments } from './Attachments'
 import { QuickCharge } from './QuickCharge'
+import { ReceiptScanner } from './ReceiptScanner'
 import { ChargesTable } from './ChargesTable'
 import { TimerControls } from './TimerControls'
 import { PartsCard } from './PartsCard'
 import { ChecklistCard } from './ChecklistCard'
 import { SignatureCard } from './SignatureCard'
+import { PendingCommentList } from './PendingCommentList'
 import type { ChecklistItem } from '@/app/lib/actions/checklist'
 import { getMyTimer } from '@/app/lib/actions/timer'
 
@@ -283,6 +285,7 @@ export default async function TicketDetailPage({
                 ))}
               </ol>
             )}
+            <PendingCommentList ticketId={ticket.id} />
           </div>
 
           <ChecklistCard
@@ -296,6 +299,8 @@ export default async function TicketDetailPage({
           />
 
           <QuickCharge ticketId={ticket.id} items={items} />
+
+          <ReceiptScanner ticketId={ticket.id} items={items} />
 
           <PartsCard
             ticketId={ticket.id}

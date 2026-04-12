@@ -1,13 +1,18 @@
 'use client'
 
 import { useEffect, useState, useTransition } from 'react'
+import { useRouter } from 'next/navigation'
 import type { TH_Item } from '@prisma/client'
 import {
   cancelTimer,
   pauseResumeTimer,
   startTimer,
-  stopTimerAndCharge,
 } from '@/app/lib/actions/timer'
+import { enqueueRequest, subscribeQueue } from '@/app/lib/sync-queue'
+import {
+  isTimerLocallyStopped,
+  markTimerLocallyStopped,
+} from '@/app/lib/offline-db'
 
 type Item = Pick<TH_Item, 'id' | 'name' | 'type' | 'code'>
 
@@ -32,6 +37,7 @@ export function TimerControls({
   const [isPending, startTransition] = useTransition()
   const [err, setErr] = useState<string | null>(null)
   const [showStopDialog, setShowStopDialog] = useState(false)
+  const [ghostHidden, setGhostHidden] = useState(false)
 
   useEffect(() => {
     if (!initial) return
@@ -39,8 +45,33 @@ export function TimerControls({
     return () => clearInterval(h)
   }, [initial])
 
-  const runningOnThisTicket = initial?.ticketId === ticketId
-  const runningElsewhere = initial && !runningOnThisTicket
+  // Hide the controls if this ticket's timer was stopped locally while
+  // offline — the server row still exists until the LOG_TIME op flushes,
+  // but from the user's perspective it's already done.
+  useEffect(() => {
+    if (!initial || initial.ticketId !== ticketId) {
+      setGhostHidden(false)
+      return
+    }
+    let cancelled = false
+    const check = () => {
+      isTimerLocallyStopped(ticketId)
+        .then((v) => {
+          if (!cancelled) setGhostHidden(v)
+        })
+        .catch(() => {})
+    }
+    check()
+    const unsub = subscribeQueue(check)
+    return () => {
+      cancelled = true
+      unsub()
+    }
+  }, [initial, ticketId])
+
+  const runningOnThisTicket =
+    initial?.ticketId === ticketId && !ghostHidden
+  const runningElsewhere = initial && initial.ticketId !== ticketId
   const isPaused = initial?.pausedAtMs != null
 
   const totalMs = initial
@@ -161,6 +192,7 @@ export function TimerControls({
       {err && <div className="mt-2 text-xs text-priority-urgent">{err}</div>}
       {showStopDialog && (
         <StopDialog
+          ticketId={ticketId}
           items={items}
           elapsed={elapsed}
           onClose={() => setShowStopDialog(false)}
@@ -171,14 +203,17 @@ export function TimerControls({
 }
 
 function StopDialog({
+  ticketId,
   items,
   elapsed,
   onClose,
 }: {
+  ticketId: string
   items: Item[]
   elapsed: number
   onClose: () => void
 }) {
+  const router = useRouter()
   const laborItems = items.filter((i) => i.type === 'LABOR')
   const [itemId, setItemId] = useState<string>(laborItems[0]?.id ?? '')
   const [description, setDescription] = useState('')
@@ -191,13 +226,36 @@ function StopDialog({
       return
     }
     setErr(null)
+    const durationMinutes = Math.max(1, Math.round(elapsed / 60_000))
     startTransition(async () => {
-      const res = await stopTimerAndCharge(itemId, description)
-      if (!res.ok) {
-        setErr(res.error)
-        return
+      try {
+        const res = await enqueueRequest({
+          type: 'LOG_TIME',
+          entityType: 'TICKET',
+          entityId: ticketId,
+          url: `/api/timer/stop`,
+          body: {
+            ticketId,
+            itemId,
+            durationMinutes,
+            description,
+          },
+        })
+        if (res.synced) {
+          router.refresh()
+        } else {
+          // Offline — mark this ticket's timer as locally stopped so
+          // the TimerBar and TimerControls don't render a phantom
+          // running timer until the queue flushes.
+          await markTimerLocallyStopped(ticketId, res.clientOpId)
+          alert(
+            'Saved offline — your charge will be logged when you reconnect.',
+          )
+        }
+        onClose()
+      } catch (e) {
+        setErr(e instanceof Error ? e.message : 'Failed')
       }
-      onClose()
     })
   }
 

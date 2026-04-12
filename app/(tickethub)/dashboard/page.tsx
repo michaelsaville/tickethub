@@ -17,7 +17,15 @@ export default async function DashboardPage() {
   startOfWeek.setDate(now.getDate() - now.getDay())
   startOfWeek.setHours(0, 0, 0, 0)
 
-  const [myOpen, unassigned, slaAtRisk, closedThisWeek, recent] = await Promise.all([
+  const [
+    myOpen,
+    unassigned,
+    slaAtRisk,
+    closedThisWeek,
+    inboxPending,
+    inboxForwardedByMe,
+    recent,
+  ] = await Promise.all([
     prisma.tH_Ticket.count({
       where: {
         assignedToId: userId,
@@ -47,6 +55,12 @@ export default async function DashboardPage() {
         deletedAt: null,
       },
     }),
+    prisma.tH_PendingInboundEmail.count({
+      where: { status: 'PENDING' },
+    }),
+    prisma.tH_PendingInboundEmail.count({
+      where: { status: 'PENDING', forwardedByUserId: userId },
+    }),
     prisma.tH_Ticket.findMany({
       where: {
         deletedAt: null,
@@ -71,22 +85,36 @@ export default async function DashboardPage() {
     }),
   ])
 
-  const stats: Array<{ label: string; value: number; href: string; accent?: boolean }> =
-    [
-      { label: 'My Open Tickets', value: myOpen, href: '/tickets?view=mine' },
-      { label: 'Unassigned', value: unassigned, href: '/tickets?view=unassigned' },
-      {
-        label: 'SLA At Risk',
-        value: slaAtRisk,
-        href: '/tickets?view=sla-risk',
-        accent: slaAtRisk > 0,
-      },
-      {
-        label: 'Closed This Week',
-        value: closedThisWeek,
-        href: '/tickets?status=CLOSED',
-      },
-    ]
+  const stats: Array<{
+    label: string
+    value: number
+    href: string
+    /** "urgent" uses red, "accent" uses amber brand color, undefined is quiet. */
+    tone?: 'urgent' | 'accent'
+    sublabel?: string | null
+  }> = [
+    { label: 'My Open Tickets', value: myOpen, href: '/tickets?view=mine' },
+    { label: 'Unassigned', value: unassigned, href: '/tickets?view=unassigned' },
+    {
+      label: 'SLA At Risk',
+      value: slaAtRisk,
+      href: '/tickets?view=sla-risk',
+      tone: slaAtRisk > 0 ? 'urgent' : undefined,
+    },
+    {
+      label: 'Inbox',
+      value: inboxPending,
+      href: '/inbox',
+      tone: inboxPending > 0 ? 'accent' : undefined,
+      sublabel:
+        inboxForwardedByMe > 0 ? `${inboxForwardedByMe} from you` : null,
+    },
+    {
+      label: 'Closed This Week',
+      value: closedThisWeek,
+      href: '/tickets?status=CLOSED',
+    },
+  ]
 
   return (
     <div className="p-6">
@@ -97,31 +125,34 @@ export default async function DashboardPage() {
         </p>
       </header>
 
-      <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-        {stats.map((s) => (
-          <Link
-            key={s.label}
-            href={s.href}
-            className={
-              s.accent
-                ? 'th-card border-priority-urgent/40 bg-priority-urgent/5 transition-colors hover:bg-priority-urgent/10'
+      <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-5">
+        {stats.map((s) => {
+          const cardClass =
+            s.tone === 'urgent'
+              ? 'th-card border-priority-urgent/40 bg-priority-urgent/5 transition-colors hover:bg-priority-urgent/10'
+              : s.tone === 'accent'
+                ? 'th-card border-accent/40 bg-accent/5 transition-colors hover:bg-accent/10'
                 : 'th-card transition-colors hover:bg-th-elevated'
-            }
-          >
-            <div className="font-mono text-[10px] uppercase tracking-wider text-th-text-muted">
-              {s.label}
-            </div>
-            <div
-              className={
-                s.accent
-                  ? 'mt-2 text-3xl font-semibold text-priority-urgent'
-                  : 'mt-2 text-3xl font-semibold text-slate-100'
-              }
-            >
-              {s.value}
-            </div>
-          </Link>
-        ))}
+          const numberClass =
+            s.tone === 'urgent'
+              ? 'mt-2 text-3xl font-semibold text-priority-urgent'
+              : s.tone === 'accent'
+                ? 'mt-2 text-3xl font-semibold text-accent'
+                : 'mt-2 text-3xl font-semibold text-slate-100'
+          return (
+            <Link key={s.label} href={s.href} className={cardClass}>
+              <div className="font-mono text-[10px] uppercase tracking-wider text-th-text-muted">
+                {s.label}
+              </div>
+              <div className={numberClass}>{s.value}</div>
+              {s.sublabel && (
+                <div className="mt-1 font-mono text-[10px] text-accent/80">
+                  ↪ {s.sublabel}
+                </div>
+              )}
+            </Link>
+          )
+        })}
       </div>
 
       <section className="mt-8">

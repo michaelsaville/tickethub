@@ -2,6 +2,8 @@
 
 import Link from 'next/link'
 import { useEffect, useState } from 'react'
+import { isTimerLocallyStopped } from '@/app/lib/offline-db'
+import { subscribeQueue } from '@/app/lib/sync-queue'
 
 interface TimerBarProps {
   initial: {
@@ -16,13 +18,39 @@ interface TimerBarProps {
 
 export function TimerBar({ initial }: TimerBarProps) {
   const [now, setNow] = useState<number>(() => Date.now())
+  const [ghostHidden, setGhostHidden] = useState(false)
+
   useEffect(() => {
     if (!initial) return
     const h = setInterval(() => setNow(Date.now()), 1000)
     return () => clearInterval(h)
   }, [initial])
 
-  if (!initial) return null
+  // If the active timer was stopped locally while offline, suppress the
+  // bar until the LOG_TIME op flushes (flushQueue clears the marker on
+  // success or drop).
+  useEffect(() => {
+    if (!initial) {
+      setGhostHidden(false)
+      return
+    }
+    let cancelled = false
+    const check = () => {
+      isTimerLocallyStopped(initial.ticketId)
+        .then((v) => {
+          if (!cancelled) setGhostHidden(v)
+        })
+        .catch(() => {})
+    }
+    check()
+    const unsub = subscribeQueue(check)
+    return () => {
+      cancelled = true
+      unsub()
+    }
+  }, [initial])
+
+  if (!initial || ghostHidden) return null
 
   const totalMs = initial.pausedAtMs
     ? initial.pausedAtMs - initial.startedAtMs - initial.pausedMs

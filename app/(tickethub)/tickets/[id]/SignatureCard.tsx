@@ -1,7 +1,9 @@
 'use client'
 
 import { useEffect, useRef, useState, useTransition } from 'react'
-import { createSignature, deleteSignature } from '@/app/lib/actions/signatures'
+import { useRouter } from 'next/navigation'
+import { deleteSignature } from '@/app/lib/actions/signatures'
+import { enqueueRequest } from '@/app/lib/sync-queue'
 
 type Signature = {
   id: string
@@ -202,19 +204,27 @@ function CaptureDialog({
     )
   }
 
+  const router = useRouter()
   function submit(dataUrl: string, gpsLat?: number, gpsLng?: number) {
     startTransition(async () => {
-      const res = await createSignature(ticketId, {
-        signedByName: signedByName.trim(),
-        dataUrl,
-        gpsLat,
-        gpsLng,
-      })
-      if (!res.ok) {
-        setErr(res.error)
-        return
+      try {
+        const res = await enqueueRequest({
+          type: 'CAPTURE_SIGNATURE',
+          entityType: 'TICKET',
+          entityId: ticketId,
+          url: `/api/tickets/${ticketId}/signatures`,
+          body: {
+            signedByName: signedByName.trim(),
+            dataUrl,
+            gpsLat,
+            gpsLng,
+          },
+        })
+        if (res.synced) router.refresh()
+        onClose()
+      } catch (e) {
+        setErr(e instanceof Error ? e.message : 'Failed')
       }
-      onClose()
     })
   }
 

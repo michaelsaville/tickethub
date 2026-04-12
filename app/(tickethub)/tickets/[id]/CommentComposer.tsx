@@ -1,13 +1,17 @@
 'use client'
 
 import { useState, useTransition } from 'react'
-import { addComment } from '@/app/lib/actions/tickets'
+import { useRouter } from 'next/navigation'
+import { enqueueRequest } from '@/app/lib/sync-queue'
+import { addPendingComment } from '@/app/lib/pending-comments-store'
 import { useVoiceInput } from '@/app/hooks/useVoiceInput'
 
 export function CommentComposer({ ticketId }: { ticketId: string }) {
+  const router = useRouter()
   const [body, setBody] = useState('')
   const [isInternal, setIsInternal] = useState(false)
   const [err, setErr] = useState<string | null>(null)
+  const [queuedMsg, setQueuedMsg] = useState<string | null>(null)
   const [isPending, startTransition] = useTransition()
 
   const voice = useVoiceInput((chunk) => {
@@ -17,13 +21,34 @@ export function CommentComposer({ ticketId }: { ticketId: string }) {
   function submit() {
     if (!body.trim()) return
     setErr(null)
+    setQueuedMsg(null)
+    const pending = body
+    const pendingInternal = isInternal
     startTransition(async () => {
-      const res = await addComment(ticketId, body, isInternal)
-      if (!res.ok) {
-        setErr(res.error ?? 'Failed')
-        return
+      try {
+        const res = await enqueueRequest({
+          type: 'ADD_COMMENT',
+          entityType: 'TICKET',
+          entityId: ticketId,
+          url: `/api/tickets/${ticketId}/comments`,
+          body: { body: pending, isInternal: pendingInternal },
+        })
+        setBody('')
+        if (res.synced) {
+          router.refresh()
+        } else {
+          addPendingComment({
+            clientOpId: res.clientOpId,
+            ticketId,
+            body: pending,
+            isInternal: pendingInternal,
+            createdAt: Date.now(),
+          })
+          setQueuedMsg('Saved offline — will send when reconnected.')
+        }
+      } catch (e) {
+        setErr(e instanceof Error ? e.message : 'Failed')
       }
-      setBody('')
     })
   }
 
@@ -87,6 +112,11 @@ export function CommentComposer({ ticketId }: { ticketId: string }) {
       {err && (
         <div className="mt-2 rounded-md border border-priority-urgent/40 bg-priority-urgent/10 px-3 py-1.5 text-xs text-priority-urgent">
           {err}
+        </div>
+      )}
+      {queuedMsg && (
+        <div className="mt-2 rounded-md border border-amber-500/40 bg-amber-500/10 px-3 py-1.5 text-xs text-amber-300">
+          {queuedMsg}
         </div>
       )}
       <div className="mt-3 flex items-center justify-end">

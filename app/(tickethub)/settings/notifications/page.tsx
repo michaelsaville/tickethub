@@ -3,6 +3,7 @@ import { redirect } from 'next/navigation'
 import { prisma } from '@/app/lib/prisma'
 import { requireAuth } from '@/app/lib/api-auth'
 import { NotificationPrefsForm } from './NotificationPrefsForm'
+import { InboundForwardersForm } from './InboundForwardersForm'
 
 export const dynamic = 'force-dynamic'
 
@@ -19,6 +20,7 @@ export default async function NotificationSettingsPage() {
       ntfyTopic: true,
       pushoverToken: true,
       notificationMode: true,
+      inboundForwardEmails: true,
     },
   })
   if (!user) redirect('/api/auth/signin')
@@ -55,6 +57,10 @@ export default async function NotificationSettingsPage() {
         ntfyBaseUrl={ntfyUrl}
         pushoverConfigured={pushoverConfigured}
       />
+
+      <div className="mt-8">
+        <InboundForwardersForm initial={user.inboundForwardEmails ?? []} />
+      </div>
     </div>
   )
 }

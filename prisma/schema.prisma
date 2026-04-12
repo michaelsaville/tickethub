@@ -681,6 +681,7 @@ model TH_Attachment {
   fileUrl      String
   mimeType     String
   sizeBytes    Int
+  clientOpId   String?     @unique
   createdAt    DateTime    @default(now())
 
   @@map("th_attachments")
@@ -695,6 +696,7 @@ model TH_Signature {
   signatureUrl String
   gpsLat       Float?
   gpsLng       Float?
+  clientOpId   String?   @unique
   createdAt    DateTime  @default(now())
 
   @@map("th_signatures")

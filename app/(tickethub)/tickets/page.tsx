@@ -5,6 +5,7 @@ import { prisma } from '@/app/lib/prisma'
 import { requireAuth } from '@/app/lib/api-auth'
 import { SlaBadge } from '@/app/components/SlaBadge'
 import { TicketFilters } from './TicketFilters'
+import { SwipeTicketRow } from './SwipeTicketRow'
 
 export const dynamic = 'force-dynamic'
 
@@ -90,55 +91,15 @@ export default async function TicketsPage({
         </div>
       ) : (
         <>
-        {/* Mobile: card list below md breakpoint */}
+        {/* Mobile: card list below md breakpoint (swipe to resolve / wait) */}
         <ul className="mt-6 space-y-2 md:hidden">
           {tickets.map((t) => (
-            <li key={t.id}>
-              <Link
-                href={`/tickets/${t.id}`}
-                className="flex items-stretch gap-3 rounded-lg border border-th-border bg-th-surface p-3 transition-colors hover:bg-th-elevated active:bg-th-border"
-              >
-                <div
-                  className={`w-1 flex-none rounded-full ${priorityBorderClass(t.priority)}`}
-                  aria-hidden
-                />
-                <div className="min-w-0 flex-1">
-                  <div
-                    className={
-                      t.isUnread
-                        ? 'truncate font-semibold text-slate-100'
-                        : 'truncate text-slate-200'
-                    }
-                  >
-                    {t.isUnread && (
-                      <span aria-label="unread" className="mr-1 text-accent">
-                        ✉
-                      </span>
-                    )}
-                    {t.title}
-                  </div>
-                  <div className="mt-0.5 flex items-center gap-2 text-[10px] text-th-text-muted">
-                    <span className="font-mono">#{t.ticketNumber}</span>
-                    <span>·</span>
-                    <span className="truncate">
-                      {t.client.shortCode ?? t.client.name}
-                    </span>
-                    {t.assignedTo && (
-                      <>
-                        <span>·</span>
-                        <span className="truncate">{t.assignedTo.name}</span>
-                      </>
-                    )}
-                  </div>
-                </div>
-                <div className="flex flex-col items-end gap-1">
-                  <SlaBadge ticket={t} />
-                  <span className={statusBadgeClass(t.status)}>
-                    {t.status.replace(/_/g, ' ')}
-                  </span>
-                </div>
-              </Link>
-            </li>
+            <SwipeTicketRow
+              key={t.id}
+              ticket={t}
+              priorityBorderClass={priorityBorderClass(t.priority)}
+              statusBadgeClass={statusBadgeClass(t.status)}
+            />
           ))}
         </ul>
 

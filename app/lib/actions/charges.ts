@@ -32,12 +32,32 @@ export async function createCharge(
     chargedMinutes?: number
     quantity?: number
     description?: string | null
+    /** Non-LABOR only: force the unit price (cents) instead of resolving
+     *  from the catalog/contract cascade. Used by the receipt scanner, where
+     *  the receipt total IS the price. Ignored for LABOR. */
+    unitPriceOverride?: number
+    /** Override the workDate (defaults to now). Used by the receipt scanner
+     *  to record the receipt's printed date instead of upload time. */
+    workDate?: Date
+    /** Offline-queue idempotency key — if a charge with this key already
+     *  exists, return ok without re-creating. */
+    clientOpId?: string | null
+    /** Optional user override — lets REST routes pass their authed userId
+     *  without going through `getUserId()` which reads the server session. */
+    overrideUserId?: string
   },
 ): Promise<ChargeResult> {
-  const userId = await getUserId()
+  const userId = input.overrideUserId ?? (await getUserId())
   if (!userId) return { ok: false, error: 'Unauthorized' }
 
   try {
+    if (input.clientOpId) {
+      const existing = await prisma.tH_Charge.findUnique({
+        where: { clientOpId: input.clientOpId },
+        select: { id: true },
+      })
+      if (existing) return { ok: true }
+    }
     const [ticket, item] = await Promise.all([
       prisma.tH_Ticket.findUnique({
         where: { id: ticketId },
@@ -104,12 +124,19 @@ export async function createCharge(
       quantity = q
     }
 
-    const unitPrice = await resolveUnitPrice({
-      itemId: item.id,
-      contractId,
-      technicianId: userId,
-      chargeType,
-    })
+    const overrideAllowed =
+      chargeType !== 'LABOR' &&
+      typeof input.unitPriceOverride === 'number' &&
+      Number.isFinite(input.unitPriceOverride) &&
+      input.unitPriceOverride >= 0
+    const unitPrice = overrideAllowed
+      ? Math.round(input.unitPriceOverride!)
+      : await resolveUnitPrice({
+          itemId: item.id,
+          contractId,
+          technicianId: userId,
+          chargeType,
+        })
     const totalPrice = Math.round(quantity * unitPrice)
 
     // Look up the contract type — if we fell back to the Global Contract
@@ -137,6 +164,8 @@ export async function createCharge(
           quantity,
           unitPrice,
           totalPrice,
+          clientOpId: input.clientOpId ?? null,
+          ...(input.workDate ? { workDate: input.workDate } : {}),
         },
       })
       // Block-hours auto-increment: if a LABOR charge lands on a

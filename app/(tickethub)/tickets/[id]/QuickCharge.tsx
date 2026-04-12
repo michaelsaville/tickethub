@@ -1,8 +1,9 @@
 'use client'
 
 import { useMemo, useState, useTransition } from 'react'
+import { useRouter } from 'next/navigation'
 import type { TH_Item } from '@prisma/client'
-import { createCharge } from '@/app/lib/actions/charges'
+import { enqueueRequest } from '@/app/lib/sync-queue'
 
 const LABOR_QUICK_PICKS = [15, 30, 60, 120] as const
 
@@ -26,7 +27,9 @@ export function QuickCharge({
   const [quantity, setQuantity] = useState<number>(1)
   const [description, setDescription] = useState('')
   const [err, setErr] = useState<string | null>(null)
+  const [queuedMsg, setQueuedMsg] = useState<string | null>(null)
   const [isPending, startTransition] = useTransition()
+  const router = useRouter()
 
   const selectedItem = items.find((i) => i.id === itemId)
   const isLabor = selectedItem?.type === 'LABOR'
@@ -37,23 +40,37 @@ export function QuickCharge({
       return
     }
     setErr(null)
+    setQueuedMsg(null)
     startTransition(async () => {
-      const res = await createCharge(ticketId, {
-        itemId,
-        durationMinutes: isLabor ? minutes : undefined,
-        chargedMinutes:
-          isLabor && chargedMinutes !== '' ? Number(chargedMinutes) : undefined,
-        quantity: isLabor ? undefined : quantity,
-        description,
-      })
-      if (!res.ok) {
-        setErr(res.error)
-        return
+      try {
+        const res = await enqueueRequest({
+          type: 'ADD_CHARGE',
+          entityType: 'TICKET',
+          entityId: ticketId,
+          url: `/api/tickets/${ticketId}/charges`,
+          body: {
+            itemId,
+            durationMinutes: isLabor ? minutes : undefined,
+            chargedMinutes:
+              isLabor && chargedMinutes !== ''
+                ? Number(chargedMinutes)
+                : undefined,
+            quantity: isLabor ? undefined : quantity,
+            description,
+          },
+        })
+        setDescription('')
+        setChargedMinutes('')
+        if (isLabor) setMinutes(30)
+        else setQuantity(1)
+        if (res.synced) {
+          router.refresh()
+        } else {
+          setQueuedMsg('Offline — charge queued, will sync when online.')
+        }
+      } catch (e) {
+        setErr(e instanceof Error ? e.message : 'Failed')
       }
-      setDescription('')
-      setChargedMinutes('')
-      if (isLabor) setMinutes(30)
-      else setQuantity(1)
     })
   }
 
@@ -219,6 +236,11 @@ export function QuickCharge({
       {err && (
         <div className="mt-2 rounded-md border border-priority-urgent/40 bg-priority-urgent/10 px-3 py-1.5 text-xs text-priority-urgent">
           {err}
+        </div>
+      )}
+      {queuedMsg && (
+        <div className="mt-2 rounded-md border border-amber-500/40 bg-amber-500/10 px-3 py-1.5 text-xs text-amber-300">
+          {queuedMsg}
         </div>
       )}
 
