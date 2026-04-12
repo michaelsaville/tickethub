@@ -3,6 +3,7 @@ import { prisma } from '@/app/lib/prisma'
 import { createComment } from '@/app/lib/comments-core'
 import { createTicketCore } from '@/app/lib/tickets-core'
 import { notifyUser, ticketUrl } from '@/app/lib/notify-server'
+import { classifyReplyIntent } from '@/app/lib/ai-thankyou'
 
 /**
  * Inbound-email pipeline. Called once per message after the M365 Graph
@@ -38,7 +39,8 @@ export interface ParsedInboundEmail {
 export type PipelineOutcome =
   | { action: 'dropped'; reason: string }
   | { action: 'deduped'; pendingId: string }
-  | { action: 'threadMatch'; ticketId: string }
+  | { action: 'threadMatch'; ticketId: string; reopened?: boolean }
+  | { action: 'threadMatch_thankYou'; ticketId: string; reason: string }
   | { action: 'autoCreated'; ticketId: string }
   | { action: 'pending'; pendingId: string; forwarded: boolean }
 
@@ -302,6 +304,53 @@ export async function processInboundEmail(
   if (threadedTicketId) {
     const systemId = await getSystemActorId()
     if (systemId) {
+      // Check if ticket is closed/resolved — may need thank-you detection
+      const ticketBefore = await prisma.tH_Ticket.findUnique({
+        where: { id: threadedTicketId },
+        select: { status: true },
+      })
+      const isClosed =
+        ticketBefore?.status === 'CLOSED' ||
+        ticketBefore?.status === 'RESOLVED' ||
+        ticketBefore?.status === 'CANCELLED'
+
+      // If the ticket is closed, classify the reply before deciding
+      if (isClosed) {
+        const classification = await classifyReplyIntent(email.bodyText)
+        if (
+          classification.intent === 'thank_you' &&
+          classification.confidence >= 0.7
+        ) {
+          // Still record the comment for audit, but keep ticket closed
+          const commentBody =
+            `From: ${email.fromName ?? email.fromEmail} <${email.fromEmail}>\n\n` +
+            email.bodyText
+          await createComment(
+            systemId,
+            threadedTicketId,
+            commentBody,
+            false,
+            `inbound:${email.graphMessageId}`,
+          )
+          // Add an internal note explaining why we didn't reopen
+          await createComment(
+            systemId,
+            threadedTicketId,
+            `[AI] Reply classified as thank-you (${Math.round(classification.confidence * 100)}% confidence). Ticket not reopened. Reason: ${classification.reason}`,
+            true, // internal
+          )
+          console.log(
+            `[inbox-core] thank-you detected on #${threadedTicketId}, not reopening`,
+            classification,
+          )
+          return {
+            action: 'threadMatch_thankYou',
+            ticketId: threadedTicketId,
+            reason: classification.reason,
+          }
+        }
+      }
+
       const commentBody =
         `From: ${email.fromName ?? email.fromEmail} <${email.fromEmail}>\n\n` +
         email.bodyText
@@ -312,10 +361,41 @@ export async function processInboundEmail(
         false, // public
         `inbound:${email.graphMessageId}`, // idempotency key
       )
-      // Mark unread + notify assignee
-      const ticket = await prisma.tH_Ticket.update({
+
+      // If the ticket was closed, reopen it (reply needs action)
+      const reopened = isClosed
+      if (reopened) {
+        await prisma.tH_Ticket.update({
+          where: { id: threadedTicketId },
+          data: {
+            status: 'OPEN',
+            closedAt: null,
+            isUnread: true,
+          },
+        })
+        await prisma.tH_TicketEvent.create({
+          data: {
+            ticketId: threadedTicketId,
+            userId: systemId,
+            type: 'STATUS_CHANGE',
+            data: {
+              from: ticketBefore!.status,
+              to: 'OPEN',
+              reason: 'Reopened by client email reply',
+            },
+          },
+        })
+      } else {
+        // Mark unread
+        await prisma.tH_Ticket.update({
+          where: { id: threadedTicketId },
+          data: { isUnread: true },
+        })
+      }
+
+      // Notify assignee
+      const ticket = await prisma.tH_Ticket.findUnique({
         where: { id: threadedTicketId },
-        data: { isUnread: true },
         select: {
           id: true,
           ticketNumber: true,
@@ -324,32 +404,56 @@ export async function processInboundEmail(
           client: { select: { name: true, shortCode: true } },
         },
       })
-      if (ticket.assignedToId) {
+      if (ticket?.assignedToId) {
+        const clientLabel = ticket.client.shortCode ?? ticket.client.name
         notifyUser(ticket.assignedToId, {
-          title: `Client reply: #${ticket.ticketNumber}`,
-          body: `${ticket.client.shortCode ?? ticket.client.name} — ${snippet.slice(0, 120)}`,
+          title: reopened
+            ? `Reopened: #${ticket.ticketNumber}`
+            : `Client reply: #${ticket.ticketNumber}`,
+          body: `${clientLabel} — ${snippet.slice(0, 120)}`,
           url: ticketUrl(ticket.id),
-          priority: 'normal',
+          priority: reopened ? 'high' : 'normal',
           category: 'COMMENT',
         })
       }
     }
-    return { action: 'threadMatch', ticketId: threadedTicketId }
+    return { action: 'threadMatch', ticketId: threadedTicketId, reopened: true }
   }
 
-  // 4. Known contact → auto-create
+  // 4. Known contact → auto-create (with AI classification if available)
   const contactMatch = await findContactMatch(email.fromEmail)
   if (contactMatch) {
     const systemId = await getSystemActorId()
     if (systemId) {
+      // Try AI classification for better priority/type on auto-created tickets
+      let aiPriority: 'URGENT' | 'HIGH' | 'MEDIUM' | 'LOW' = 'MEDIUM'
+      let aiType: 'INCIDENT' | 'SERVICE_REQUEST' | 'PROBLEM' | 'CHANGE' | 'MAINTENANCE' | 'INTERNAL' = 'INCIDENT'
+      try {
+        const { classifyTicket } = await import('@/app/lib/ai-classify')
+        const client = await prisma.tH_Client.findUnique({
+          where: { id: contactMatch.clientId },
+          select: { name: true },
+        })
+        const classification = await classifyTicket({
+          title: email.subject || '(no subject)',
+          description: email.bodyText.slice(0, 1500),
+          clientName: client?.name ?? 'Unknown',
+          techNames: [],
+        })
+        aiPriority = classification.priority
+        aiType = classification.type
+      } catch {
+        // AI is best-effort — defaults are fine
+      }
+
       const res = await createTicketCore({
         clientId: contactMatch.clientId,
         title: email.subject || '(no subject)',
         description:
           `Auto-created from email from ${contactMatch.contactName || email.fromEmail}\n\n` +
           email.bodyText,
-        priority: 'MEDIUM',
-        type: 'INCIDENT',
+        priority: aiPriority,
+        type: aiType,
         createdById: systemId,
       })
       if (res.ok) {

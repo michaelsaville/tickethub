@@ -6,6 +6,7 @@ import { requireAuth } from '@/app/lib/api-auth'
 import { SlaBadge } from '@/app/components/SlaBadge'
 import { TicketFilters } from './TicketFilters'
 import { SwipeTicketRow } from './SwipeTicketRow'
+import { AiSearch } from './AiSearch'
 
 export const dynamic = 'force-dynamic'
 
@@ -81,7 +82,10 @@ export default async function TicketsPage({
         </Link>
       </header>
 
-      <TicketFilters users={users} currentUserId={session!.user.id} />
+      <div className="flex items-center gap-2">
+        <TicketFilters users={users} currentUserId={session!.user.id} />
+        <AiSearch />
+      </div>
 
       {tickets.length === 0 ? (
         <div className="th-card mt-6 text-center">

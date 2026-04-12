@@ -14,6 +14,7 @@ import { PartsCard } from './PartsCard'
 import { ChecklistCard } from './ChecklistCard'
 import { SignatureCard } from './SignatureCard'
 import { PendingCommentList } from './PendingCommentList'
+import { SuggestedResolution } from './SuggestedResolution'
 import type { ChecklistItem } from '@/app/lib/actions/checklist'
 import { getMyTimer } from '@/app/lib/actions/timer'
 
@@ -386,6 +387,7 @@ export default async function TicketDetailPage({
               </ul>
             )}
           </div>
+          <SuggestedResolution ticketId={ticket.id} />
         </aside>
       </div>
     </div>

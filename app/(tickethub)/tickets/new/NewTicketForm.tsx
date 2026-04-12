@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useFormState, useFormStatus } from 'react-dom'
 import { createTicket, type CreateTicketResult } from '@/app/lib/actions/tickets'
 
@@ -25,6 +25,14 @@ interface ClientContext {
   }>
 }
 
+interface AiSuggestion {
+  priority: string
+  type: string
+  category: string
+  suggestedAssigneeName: string | null
+  reasoning: string
+}
+
 export function NewTicketForm({
   clients,
   techs,
@@ -42,6 +50,12 @@ export function NewTicketForm({
   const [contractId, setContractId] = useState<string>('')
   const [context, setContext] = useState<ClientContext | null>(null)
   const [loadingContext, setLoadingContext] = useState(false)
+  const [aiSuggestion, setAiSuggestion] = useState<AiSuggestion | null>(null)
+  const [aiLoading, setAiLoading] = useState(false)
+  const [aiDismissed, setAiDismissed] = useState(false)
+  const priorityRef = useRef<HTMLSelectElement>(null)
+  const typeRef = useRef<HTMLSelectElement>(null)
+  const assigneeRef = useRef<HTMLSelectElement>(null)
 
   useEffect(() => {
     if (!clientId) {
@@ -79,6 +93,57 @@ export function NewTicketForm({
       .finally(() => setLoadingContext(false))
     return () => ac.abort()
   }, [clientId])
+
+  async function handleClassify() {
+    const titleEl = document.getElementById('title') as HTMLInputElement | null
+    const descEl = document.getElementById('description') as HTMLTextAreaElement | null
+    const title = titleEl?.value?.trim()
+    if (!title) return
+    setAiLoading(true)
+    setAiDismissed(false)
+    setAiSuggestion(null)
+    try {
+      const res = await fetch('/api/ai/classify-ticket', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          title,
+          description: descEl?.value?.trim() || '',
+          clientId: clientId || undefined,
+        }),
+      })
+      const json = await res.json()
+      if (json.data) setAiSuggestion(json.data as AiSuggestion)
+    } catch {
+      // Silently fail — AI is a nice-to-have
+    } finally {
+      setAiLoading(false)
+    }
+  }
+
+  function applyAiSuggestion() {
+    if (!aiSuggestion) return
+    if (priorityRef.current) {
+      priorityRef.current.value = aiSuggestion.priority
+      priorityRef.current.dispatchEvent(new Event('change', { bubbles: true }))
+    }
+    if (typeRef.current) {
+      typeRef.current.value = aiSuggestion.type
+      typeRef.current.dispatchEvent(new Event('change', { bubbles: true }))
+    }
+    if (aiSuggestion.suggestedAssigneeName && assigneeRef.current) {
+      const match = techs.find(
+        (t) =>
+          t.name.toLowerCase() ===
+          aiSuggestion.suggestedAssigneeName!.toLowerCase(),
+      )
+      if (match) {
+        assigneeRef.current.value = match.id
+        assigneeRef.current.dispatchEvent(new Event('change', { bubbles: true }))
+      }
+    }
+    setAiDismissed(true)
+  }
 
   return (
     <div className="grid gap-6 lg:grid-cols-[1fr,320px]">
@@ -168,7 +233,71 @@ export function NewTicketForm({
             className="th-input resize-y"
             placeholder="What's going on? Include error messages, steps taken, client-reported details."
           />
+          <button
+            type="button"
+            onClick={handleClassify}
+            disabled={aiLoading}
+            className="mt-2 inline-flex items-center gap-1.5 rounded bg-th-surface-raised px-3 py-1.5 text-xs font-medium text-th-text-secondary hover:bg-th-surface-raised/80 hover:text-accent transition-colors disabled:opacity-50"
+          >
+            {aiLoading ? (
+              <>
+                <span className="inline-block h-3 w-3 animate-spin rounded-full border-2 border-accent border-t-transparent" />
+                Classifying...
+              </>
+            ) : (
+              <>
+                <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M9.813 15.904 9 18.75l-.813-2.846a4.5 4.5 0 0 0-3.09-3.09L2.25 12l2.846-.813a4.5 4.5 0 0 0 3.09-3.09L9 5.25l.813 2.846a4.5 4.5 0 0 0 3.09 3.09L15.75 12l-2.846.813a4.5 4.5 0 0 0-3.09 3.09ZM18.259 8.715 18 9.75l-.259-1.035a3.375 3.375 0 0 0-2.455-2.456L14.25 6l1.036-.259a3.375 3.375 0 0 0 2.455-2.456L18 2.25l.259 1.035a3.375 3.375 0 0 0 2.455 2.456L21.75 6l-1.036.259a3.375 3.375 0 0 0-2.455 2.456Z" />
+                </svg>
+                Classify with AI
+              </>
+            )}
+          </button>
         </div>
+
+        {/* AI Classification */}
+        {aiSuggestion && !aiDismissed && (
+          <div className="rounded-md border border-accent/40 bg-accent/5 px-3 py-2">
+            <div className="flex items-center justify-between">
+              <span className="font-mono text-[10px] uppercase tracking-wider text-accent">
+                AI Suggestion
+              </span>
+              <button
+                type="button"
+                onClick={() => setAiDismissed(true)}
+                className="text-xs text-th-text-muted hover:text-th-text-secondary"
+              >
+                Dismiss
+              </button>
+            </div>
+            <div className="mt-1.5 flex flex-wrap gap-2 text-xs">
+              <span className="rounded bg-th-surface-raised px-2 py-0.5">
+                Priority: <strong>{aiSuggestion.priority}</strong>
+              </span>
+              <span className="rounded bg-th-surface-raised px-2 py-0.5">
+                Type: <strong>{aiSuggestion.type.replace(/_/g, ' ')}</strong>
+              </span>
+              <span className="rounded bg-th-surface-raised px-2 py-0.5">
+                Category: <strong>{aiSuggestion.category}</strong>
+              </span>
+              {aiSuggestion.suggestedAssigneeName && (
+                <span className="rounded bg-th-surface-raised px-2 py-0.5">
+                  Assignee: <strong>{aiSuggestion.suggestedAssigneeName}</strong>
+                </span>
+              )}
+            </div>
+            <p className="mt-1 text-xs text-th-text-muted italic">
+              {aiSuggestion.reasoning}
+            </p>
+            <button
+              type="button"
+              onClick={applyAiSuggestion}
+              className="mt-2 rounded bg-accent/20 px-3 py-1 text-xs font-medium text-accent hover:bg-accent/30 transition-colors"
+            >
+              Apply Suggestions
+            </button>
+          </div>
+        )}
 
         <div className="grid grid-cols-3 gap-3">
           <div>
@@ -181,6 +310,7 @@ export function NewTicketForm({
             <select
               id="priority"
               name="priority"
+              ref={priorityRef}
               defaultValue="MEDIUM"
               className="th-input"
             >
@@ -200,6 +330,7 @@ export function NewTicketForm({
             <select
               id="type"
               name="type"
+              ref={typeRef}
               defaultValue="INCIDENT"
               className="th-input"
             >
@@ -221,6 +352,7 @@ export function NewTicketForm({
             <select
               id="assignedToId"
               name="assignedToId"
+              ref={assigneeRef}
               defaultValue=""
               className="th-input"
             >
