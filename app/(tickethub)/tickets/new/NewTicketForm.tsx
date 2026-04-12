@@ -6,6 +6,13 @@ import { createTicket, type CreateTicketResult } from '@/app/lib/actions/tickets
 
 type Client = { id: string; name: string; shortCode: string | null }
 type Tech = { id: string; name: string }
+type SiteWithCoords = {
+  id: string
+  name: string
+  clientId: string
+  latitude: number
+  longitude: number
+}
 
 interface ClientContext {
   internalNotes: string | null
@@ -36,10 +43,12 @@ interface AiSuggestion {
 export function NewTicketForm({
   clients,
   techs,
+  sites,
   initialClientId,
 }: {
   clients: Client[]
   techs: Tech[]
+  sites: SiteWithCoords[]
   initialClientId: string
 }) {
   const [state, formAction] = useFormState<CreateTicketResult | null, FormData>(
@@ -53,9 +62,55 @@ export function NewTicketForm({
   const [aiSuggestion, setAiSuggestion] = useState<AiSuggestion | null>(null)
   const [aiLoading, setAiLoading] = useState(false)
   const [aiDismissed, setAiDismissed] = useState(false)
+  const [locationMatch, setLocationMatch] = useState<{
+    site: SiteWithCoords
+    client: Client
+    distanceMeters: number
+  } | null>(null)
+  const [locationDismissed, setLocationDismissed] = useState(false)
   const priorityRef = useRef<HTMLSelectElement>(null)
   const typeRef = useRef<HTMLSelectElement>(null)
   const assigneeRef = useRef<HTMLSelectElement>(null)
+
+  // Auto-detect location on mobile — find nearest client site
+  useEffect(() => {
+    if (initialClientId || !navigator.geolocation || sites.length === 0) return
+    navigator.geolocation.getCurrentPosition(
+      (pos) => {
+        const { latitude, longitude } = pos.coords
+        const toRad = (d: number) => (d * Math.PI) / 180
+        let closest: SiteWithCoords | null = null
+        let closestDist = Infinity
+        for (const site of sites) {
+          const R = 6_371_000
+          const dLat = toRad(site.latitude - latitude)
+          const dLng = toRad(site.longitude - longitude)
+          const a =
+            Math.sin(dLat / 2) ** 2 +
+            Math.cos(toRad(latitude)) *
+              Math.cos(toRad(site.latitude)) *
+              Math.sin(dLng / 2) ** 2
+          const d = R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a))
+          if (d < closestDist) {
+            closest = site
+            closestDist = d
+          }
+        }
+        if (closest && closestDist <= 200) {
+          const matchedClient = clients.find((c) => c.id === closest!.clientId)
+          if (matchedClient) {
+            setLocationMatch({
+              site: closest,
+              client: matchedClient,
+              distanceMeters: Math.round(closestDist),
+            })
+          }
+        }
+      },
+      () => {}, // Silently fail — GPS is best-effort
+      { timeout: 5000, enableHighAccuracy: true },
+    )
+  }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     if (!clientId) {
@@ -149,6 +204,38 @@ export function NewTicketForm({
     <div className="grid gap-6 lg:grid-cols-[1fr,320px]">
       <form action={formAction} className="th-card space-y-4">
         <input type="hidden" name="contractId" value={contractId} />
+
+        {/* GPS location match banner */}
+        {locationMatch && !locationDismissed && !clientId && (
+          <div className="rounded-md border border-green-500/40 bg-green-500/5 px-3 py-2">
+            <div className="flex items-center justify-between">
+              <span className="font-mono text-[10px] uppercase tracking-wider text-green-400">
+                Location Detected
+              </span>
+              <button
+                type="button"
+                onClick={() => setLocationDismissed(true)}
+                className="text-xs text-th-text-muted hover:text-th-text-secondary"
+              >
+                Dismiss
+              </button>
+            </div>
+            <p className="mt-1 text-xs text-slate-200">
+              You appear to be at <strong>{locationMatch.site.name}</strong> ({locationMatch.client.name}) — {locationMatch.distanceMeters}m away
+            </p>
+            <button
+              type="button"
+              onClick={() => {
+                setClientId(locationMatch.client.id)
+                setLocationDismissed(true)
+              }}
+              className="mt-2 rounded bg-green-500/20 px-3 py-1 text-xs font-medium text-green-400 hover:bg-green-500/30 transition-colors"
+            >
+              Use This Client
+            </button>
+          </div>
+        )}
+
         <div>
           <label
             htmlFor="clientId"

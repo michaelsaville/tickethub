@@ -81,11 +81,14 @@ model TH_Site {
   state     String?
   zip       String?
   country   String   @default("US")
+  latitude  Float?
+  longitude Float?
   notes     String?
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  tickets TH_Ticket[]
+  tickets        TH_Ticket[]
+  stoppingPoints TH_StoppingPoint[]
 
   @@map("th_sites")
   @@schema("tickethub")
@@ -578,6 +581,8 @@ model TH_User {
   ticketEvents    TH_TicketEvent[]
   parts           TH_TicketPart[]
   forwardedInboundEmails TH_PendingInboundEmail[] @relation("ForwardedInboundEmails")
+  locationPings    TH_LocationPing[]   @relation("LocationPings")
+  stoppingPoints   TH_StoppingPoint[]  @relation("StoppingPoints")
 
   @@map("th_users")
   @@schema("tickethub")
@@ -798,5 +803,43 @@ model TH_Notification {
   readAt    DateTime?
 
   @@map("th_notifications")
+  @@schema("tickethub")
+}
+
+// ─── LOCATION TRACKING ──────────────────────────────────────────────────
+
+model TH_LocationPing {
+  id        String   @id @default(cuid())
+  userId    String
+  user      TH_User  @relation("LocationPings", fields: [userId], references: [id])
+  latitude  Float
+  longitude Float
+  accuracy  Float?
+  createdAt DateTime @default(now())
+
+  @@index([userId, createdAt])
+  @@map("th_location_pings")
+  @@schema("tickethub")
+}
+
+model TH_StoppingPoint {
+  id             String    @id @default(cuid())
+  userId         String
+  user           TH_User   @relation("StoppingPoints", fields: [userId], references: [id])
+  latitude       Float
+  longitude      Float
+  arrivedAt      DateTime
+  departedAt     DateTime?
+  durationMinutes Int?
+  /// Nearest client site (if within radius)
+  nearestSiteId  String?
+  nearestSite    TH_Site?  @relation(fields: [nearestSiteId], references: [id])
+  distanceMeters Float?
+  /// Was a ticket created at this site during this stop?
+  ticketCreated  Boolean   @default(false)
+  ticketId       String?
+
+  @@index([userId, arrivedAt])
+  @@map("th_stopping_points")
   @@schema("tickethub")
 }

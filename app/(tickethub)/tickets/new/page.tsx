@@ -14,7 +14,7 @@ export default async function NewTicketPage({
   const { error } = await requireAuth()
   if (error) redirect('/api/auth/signin')
 
-  const [clients, techs] = await Promise.all([
+  const [clients, techs, sites] = await Promise.all([
     prisma.tH_Client.findMany({
       where: { isActive: true },
       orderBy: { name: 'asc' },
@@ -24,6 +24,16 @@ export default async function NewTicketPage({
       where: { isActive: true },
       orderBy: { name: 'asc' },
       select: { id: true, name: true },
+    }),
+    prisma.tH_Site.findMany({
+      where: { latitude: { not: null }, longitude: { not: null } },
+      select: {
+        id: true,
+        name: true,
+        clientId: true,
+        latitude: true,
+        longitude: true,
+      },
     }),
   ])
 
@@ -45,6 +55,13 @@ export default async function NewTicketPage({
       <NewTicketForm
         clients={clients}
         techs={techs}
+        sites={sites.map((s) => ({
+          id: s.id,
+          name: s.name,
+          clientId: s.clientId,
+          latitude: s.latitude!,
+          longitude: s.longitude!,
+        }))}
         initialClientId={initialClientId}
       />
     </div>

@@ -21,6 +21,28 @@ export default async function ReportsPage() {
       </header>
 
       <ReportBuilder />
+
+      <div className="mt-8">
+        <h2 className="mb-3 font-mono text-[10px] uppercase tracking-wider text-th-text-muted">
+          Other Reports
+        </h2>
+        <a
+          href="/reports/field-activity"
+          className="th-card flex items-center gap-3 hover:border-accent/40 transition-colors"
+        >
+          <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-accent/10 text-accent text-lg">
+            📍
+          </div>
+          <div>
+            <div className="font-medium text-sm text-slate-200">
+              Field Activity
+            </div>
+            <div className="text-xs text-th-text-secondary">
+              Daily stopping points, site visits, and missed ticket alerts
+            </div>
+          </div>
+        </a>
+      </div>
     </div>
   )
 }

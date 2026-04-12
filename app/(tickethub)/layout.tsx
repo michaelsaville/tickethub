@@ -3,6 +3,7 @@ import { MobileBottomBar } from '@/app/components/layout/MobileBottomBar'
 import { TimerBar } from '@/app/components/TimerBar'
 import { InstallPrompt } from '@/app/components/InstallPrompt'
 import { SyncStatusBadge } from '@/app/components/SyncStatusBadge'
+import { LocationTracker } from '@/app/components/LocationTracker'
 import { getMyTimer } from '@/app/lib/actions/timer'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/app/lib/auth'
@@ -48,6 +49,7 @@ export default async function TicketHubLayout({
       </main>
       <MobileBottomBar />
       <SyncStatusBadge />
+      <LocationTracker />
     </div>
   )
 }
