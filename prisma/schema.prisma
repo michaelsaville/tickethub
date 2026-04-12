@@ -65,7 +65,9 @@ model TH_Contact {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  tickets TH_Ticket[]
+  tickets       TH_Ticket[]
+  reminders     TH_Reminder[]
+  portalTokens  TH_ContactPortalToken[]
 
   @@map("th_contacts")
   @@schema("tickethub")
@@ -583,6 +585,7 @@ model TH_User {
   forwardedInboundEmails TH_PendingInboundEmail[] @relation("ForwardedInboundEmails")
   locationPings    TH_LocationPing[]   @relation("LocationPings")
   stoppingPoints   TH_StoppingPoint[]  @relation("StoppingPoints")
+  remindersCreated TH_Reminder[]       @relation("ReminderCreator")
 
   @@map("th_users")
   @@schema("tickethub")
@@ -841,5 +844,96 @@ model TH_StoppingPoint {
 
   @@index([userId, arrivedAt])
   @@map("th_stopping_points")
+  @@schema("tickethub")
+}
+
+// ─── REMINDERS ──────────────────────────────────────────────────────────
+
+enum TH_ReminderStatus {
+  ACTIVE
+  SNOOZED
+  ACKNOWLEDGED
+  CANCELLED
+  @@schema("tickethub")
+}
+
+enum TH_ReminderSource {
+  MANUAL
+  SYNCRO_ESTIMATE
+  @@schema("tickethub")
+}
+
+enum TH_ReminderRecurrence {
+  ONCE
+  DAILY
+  EVERY_3_DAYS
+  WEEKLY
+  @@schema("tickethub")
+}
+
+model TH_Reminder {
+  id            String                @id @default(cuid())
+  contactId     String
+  contact       TH_Contact            @relation(fields: [contactId], references: [id])
+  createdById   String?
+  createdBy     TH_User?              @relation("ReminderCreator", fields: [createdById], references: [id])
+
+  source        TH_ReminderSource
+  /// External ID to deduplicate (e.g., Syncro estimate ID)
+  externalRef   String?
+
+  title         String
+  body          String?
+  /// URL the contact can follow (e.g., Syncro estimate link)
+  actionUrl     String?
+
+  status        TH_ReminderStatus     @default(ACTIVE)
+  recurrence    TH_ReminderRecurrence @default(EVERY_3_DAYS)
+  dueDate       DateTime?
+
+  /// When the next notification should fire
+  nextNotifyAt  DateTime
+  lastNotifiedAt DateTime?
+  notifyCount   Int                   @default(0)
+
+  snoozedUntil  DateTime?
+  acknowledgedAt DateTime?
+  cancelledAt    DateTime?
+
+  createdAt     DateTime              @default(now())
+  updatedAt     DateTime              @updatedAt
+
+  deliveries    TH_ReminderDelivery[]
+
+  @@unique([source, externalRef])
+  @@index([status, nextNotifyAt])
+  @@map("th_reminders")
+  @@schema("tickethub")
+}
+
+model TH_ReminderDelivery {
+  id          String      @id @default(cuid())
+  reminderId  String
+  reminder    TH_Reminder @relation(fields: [reminderId], references: [id])
+  channel     String      // EMAIL | NTFY
+  toAddress   String
+  sentAt      DateTime    @default(now())
+  error       String?
+
+  @@index([reminderId, sentAt])
+  @@map("th_reminder_deliveries")
+  @@schema("tickethub")
+}
+
+model TH_ContactPortalToken {
+  id          String    @id @default(cuid())
+  contactId   String
+  contact     TH_Contact @relation(fields: [contactId], references: [id])
+  token       String    @unique @default(cuid())
+  isActive    Boolean   @default(true)
+  expiresAt   DateTime?
+  createdAt   DateTime  @default(now())
+
+  @@map("th_contact_portal_tokens")
   @@schema("tickethub")
 }

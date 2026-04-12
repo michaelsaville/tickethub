@@ -14,6 +14,6 @@ export default withAuth(
 
 export const config = {
   matcher: [
-    '/((?!api/auth|api/cron|api/webhooks|auth|_next/static|_next/image|favicon.ico|manifest.json|sw.js|icon-.*\\.png).*)',
+    '/((?!api/auth|api/cron|api/webhooks|api/portal|portal|auth|_next/static|_next/image|favicon.ico|manifest.json|sw.js|icon-.*\\.png).*)',
   ],
 }

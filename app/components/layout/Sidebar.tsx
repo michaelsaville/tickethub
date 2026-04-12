@@ -21,6 +21,7 @@ const SAVED_VIEWS = [
 ] as const
 
 const SECONDARY_NAV = [
+  { href: '/reminders', label: 'Reminders', icon: '🔔' },
   { href: '/kb', label: 'Knowledge Base', icon: '📚' },
   { href: '/schedule', label: 'Schedule', icon: '📅' },
   { href: '/fuel-receipts', label: 'Fuel Receipts', icon: '⛽' },
