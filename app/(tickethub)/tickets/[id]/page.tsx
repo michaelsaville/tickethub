@@ -18,6 +18,7 @@ import { SuggestedResolution } from './SuggestedResolution'
 import { TodoistButton } from './TodoistButton'
 import { TagsInput } from './TagsInput'
 import { ConvertToKbButton } from './ConvertToKbButton'
+import { DochubAssetPicker } from './DochubAssetPicker'
 import type { ChecklistItem } from '@/app/lib/actions/checklist'
 import { getMyTimer } from '@/app/lib/actions/timer'
 
@@ -228,14 +229,12 @@ export default async function TicketDetailPage({
                 </dd>
               </div>
             )}
-            {ticket.asset && (
-              <div>
-                <dt className="font-mono text-[10px] uppercase tracking-wider text-th-text-muted">
-                  Asset
-                </dt>
-                <dd className="mt-1 text-slate-200">{ticket.asset.name}</dd>
-              </div>
-            )}
+            <DochubAssetPicker
+              ticketId={ticket.id}
+              clientName={ticket.client.name}
+              linkedAssetId={ticket.dochubAssetId}
+              linkedAssetName={ticket.dochubAssetName}
+            />
             <div>
               <dt className="font-mono text-[10px] uppercase tracking-wider text-th-text-muted">
                 Created

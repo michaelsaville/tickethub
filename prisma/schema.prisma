@@ -296,6 +296,10 @@ model TH_Ticket {
   contract     TH_Contract? @relation(fields: [contractId], references: [id])
   assetId      String?
   asset        TH_Asset?    @relation(fields: [assetId], references: [id])
+  // Cross-app link to DocHub asset (public schema). Not a FK — just stores
+  // the DocHub Asset.id so the UI can render a link to dochub.pcc2k.com/assets/:id
+  dochubAssetId   String?
+  dochubAssetName String?   // cached display name to avoid cross-schema query on every load
   assignedToId String?
   assignedTo   TH_User?     @relation("AssignedTickets", fields: [assignedToId], references: [id])
   createdById  String
