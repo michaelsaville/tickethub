@@ -941,6 +941,7 @@ enum TH_ReminderStatus {
 enum TH_ReminderSource {
   MANUAL
   SYNCRO_ESTIMATE
+  TICKETHUB_ESTIMATE
   @@schema("tickethub")
 }
 

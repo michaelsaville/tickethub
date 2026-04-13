@@ -53,6 +53,12 @@ export async function POST(
     })
   }
 
+  // Auto-acknowledge any associated reminder
+  await prisma.tH_Reminder.updateMany({
+    where: { source: 'TICKETHUB_ESTIMATE', externalRef: id, status: 'ACTIVE' },
+    data: { status: 'ACKNOWLEDGED', acknowledgedAt: new Date() },
+  }).catch(() => {})
+
   return NextResponse.json({ success: true, status: action === 'approve' ? 'APPROVED' : 'DECLINED' })
 }
 

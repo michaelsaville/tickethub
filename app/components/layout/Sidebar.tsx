@@ -8,6 +8,7 @@ const PRIMARY_NAV = [
   { href: '/inbox', label: 'Inbox', icon: '📥' },
   { href: '/tickets', label: 'Tickets', icon: '🎫' },
   { href: '/clients', label: 'Clients', icon: '👥' },
+  { href: '/estimates', label: 'Estimates', icon: '📋' },
   { href: '/invoices', label: 'Invoices', icon: '🧾' },
   { href: '/assets', label: 'Assets', icon: '💻' },
   { href: '/reports', label: 'Reports', icon: '📊' },
