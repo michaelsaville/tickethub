@@ -2,10 +2,11 @@ import { redirect } from 'next/navigation'
 import { prisma } from '@/app/lib/prisma'
 import { requireAuth } from '@/app/lib/api-auth'
 import { InboxList } from './InboxList'
+import { AlertInboxList } from './AlertInboxList'
 
 export const dynamic = 'force-dynamic'
 
-type FilterKind = 'all' | 'forwarded' | 'cold' | 'dismissed'
+type FilterKind = 'all' | 'forwarded' | 'cold' | 'dismissed' | 'alerts'
 
 export default async function InboxPage({
   searchParams,
@@ -19,7 +20,8 @@ export default async function InboxPage({
   const filter: FilterKind =
     params.filter === 'forwarded' ||
     params.filter === 'cold' ||
-    params.filter === 'dismissed'
+    params.filter === 'dismissed' ||
+    params.filter === 'alerts'
       ? params.filter
       : 'all'
 
@@ -114,14 +116,28 @@ export default async function InboxPage({
         >
           Dismissed ({dismissedCount})
         </FilterChip>
+        <FilterChip
+          href="/inbox?filter=alerts"
+          active={filter === 'alerts'}
+        >
+          DocHub Alerts
+        </FilterChip>
       </nav>
 
-      <InboxList
-        rows={serialized}
-        clients={clients}
-        techs={techs}
-        currentUserId={session!.user.id}
-      />
+      {filter === 'alerts' ? (
+        <AlertInboxList
+          clients={clients}
+          techs={techs}
+          currentUserId={session!.user.id}
+        />
+      ) : (
+        <InboxList
+          rows={serialized}
+          clients={clients}
+          techs={techs}
+          currentUserId={session!.user.id}
+        />
+      )}
     </div>
   )
 }
