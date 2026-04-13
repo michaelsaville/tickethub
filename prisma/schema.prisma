@@ -36,6 +36,7 @@ model TH_Client {
   /// public reply added). Master kill switch is `TICKETHUB_CLIENT_EMAILS_ENABLED`
   /// env var — this flag only matters when the env is ON.
   emailClientOnTicketEvents Boolean @default(true)
+  syncroId      Int?     @unique // Syncro customer ID for migration dedup
   isActive      Boolean  @default(true)
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
@@ -46,6 +47,7 @@ model TH_Client {
   tickets   TH_Ticket[]
   assets    TH_Asset[]
   invoices  TH_Invoice[]
+  estimates TH_Estimate[]
 
   @@map("th_clients")
   @@schema("tickethub")
@@ -60,14 +62,16 @@ model TH_Contact {
   email     String?
   phone     String?
   jobTitle  String?
-  isPrimary Boolean  @default(false)
-  isActive  Boolean  @default(true)
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  isPrimary      Boolean  @default(false)
+  syncroContactId Int?    @unique // Syncro contact ID for migration dedup
+  isActive       Boolean  @default(true)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
 
   tickets       TH_Ticket[]
   reminders     TH_Reminder[]
   portalTokens  TH_ContactPortalToken[]
+  estimates     TH_Estimate[]
 
   @@map("th_contacts")
   @@schema("tickethub")
@@ -85,6 +89,7 @@ model TH_Site {
   country   String   @default("US")
   latitude  Float?
   longitude Float?
+  syncroSiteId Int? @unique // Syncro service address ID for migration dedup
   notes     String?
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -135,6 +140,7 @@ model TH_Contract {
   priceExceptions TH_ContractPriceException[]
   charges         TH_Charge[]
   tickets         TH_Ticket[]
+  estimates       TH_Estimate[]
 
   @@map("th_contracts")
   @@schema("tickethub")
@@ -179,6 +185,7 @@ model TH_Item {
 
   charges         TH_Charge[]
   priceExceptions TH_ContractPriceException[]
+  estimateItems   TH_EstimateItem[]
 
   @@map("th_items")
   @@schema("tickethub")
@@ -485,6 +492,80 @@ model TH_Invoice {
   attachments TH_Attachment[]
 
   @@map("th_invoices")
+  @@schema("tickethub")
+}
+
+// ─── ESTIMATES / QUOTES ───────────────────────────────────────────────────
+
+enum TH_EstimateStatus {
+  DRAFT
+  SENT
+  APPROVED
+  DECLINED
+  EXPIRED
+  CONVERTED
+  @@schema("tickethub")
+}
+
+model TH_Estimate {
+  id              String             @id @default(cuid())
+  estimateNumber  Int                @unique @default(autoincrement())
+  clientId        String
+  client          TH_Client          @relation(fields: [clientId], references: [id])
+  contactId       String?
+  contact         TH_Contact?        @relation(fields: [contactId], references: [id])
+  contractId      String?
+  contract        TH_Contract?       @relation(fields: [contractId], references: [id])
+
+  status      TH_EstimateStatus @default(DRAFT)
+  title       String
+  description String?
+
+  subtotal        Int     @default(0)
+  taxableSubtotal Int     @default(0)
+  taxState        String?
+  taxRate         Int     @default(0)
+  taxAmount       Int     @default(0)
+  totalAmount     Int     @default(0)
+
+  validUntil  DateTime?
+  notes       String?
+
+  externalRef String? // Syncro estimate ID for imported estimates
+
+  convertedToInvoiceId String?
+
+  sentAt      DateTime?
+  approvedAt  DateTime?
+  declinedAt  DateTime?
+  convertedAt DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  items TH_EstimateItem[]
+
+  @@map("th_estimates")
+  @@schema("tickethub")
+}
+
+model TH_EstimateItem {
+  id          String      @id @default(cuid())
+  estimateId  String
+  estimate    TH_Estimate @relation(fields: [estimateId], references: [id], onDelete: Cascade)
+  itemId      String
+  item        TH_Item     @relation(fields: [itemId], references: [id])
+
+  description String?
+  quantity    Float       @default(1)
+  unitPrice   Int         // cents
+  totalPrice  Int         // cents (quantity × unitPrice)
+
+  sortOrder   Int         @default(0)
+
+  createdAt DateTime @default(now())
+
+  @@map("th_estimate_items")
   @@schema("tickethub")
 }
 
