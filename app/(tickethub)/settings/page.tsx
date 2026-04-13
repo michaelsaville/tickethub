@@ -45,6 +45,16 @@ const GROUPS = [
       },
     ],
   },
+  {
+    title: 'Integrations',
+    items: [
+      {
+        href: '/settings/integrations',
+        title: 'Integrations',
+        description: 'ConnectWise RMM, M365, Syncro, QuickBooks',
+      },
+    ],
+  },
 ] as const
 
 export default async function SettingsPage() {

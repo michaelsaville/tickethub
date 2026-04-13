@@ -34,6 +34,7 @@ const DOCHUB_VAULT_URL =
 
 const FOOTER_NAV = [
   { href: '/settings', label: 'Settings', icon: '⚙️' },
+  { href: '/settings/integrations', label: 'Integrations', icon: '🔌' },
   { href: '/profile', label: 'Profile', icon: '👤' },
 ] as const
 

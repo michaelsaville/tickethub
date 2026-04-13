@@ -4,6 +4,7 @@ import { prisma } from '@/app/lib/prisma'
 import { formatCents } from '@/app/lib/billing'
 import { formatRate } from '@/app/lib/tax'
 import EstimateActions from './EstimateActions'
+import EstimateEditor from './EstimateEditor'
 
 const STATUS_COLORS: Record<string, string> = {
   DRAFT: 'bg-blue-900/50 text-blue-300',
@@ -35,6 +36,47 @@ export default async function EstimateDetailPage({
   })
 
   if (!estimate) redirect('/estimates')
+
+  // For DRAFT estimates, load catalog items and render inline editor
+  if (estimate.status === 'DRAFT') {
+    const catalogItems = await prisma.tH_Item.findMany({
+      where: { isActive: true },
+      orderBy: { name: 'asc' },
+      select: { id: true, name: true, type: true, defaultPrice: true, taxable: true },
+    })
+
+    return (
+      <div className="max-w-5xl mx-auto">
+        {/* Header */}
+        <div className="flex items-start justify-between mb-6">
+          <div>
+            <Link href="/estimates" className="text-xs text-th-secondary hover:text-accent mb-2 block">← Estimates</Link>
+            <h1 className="text-xl font-semibold">Estimate #{estimate.estimateNumber}</h1>
+            <p className="text-sm text-th-secondary mt-1">{estimate.title}</p>
+          </div>
+          <span className={`px-3 py-1 rounded text-sm font-medium ${STATUS_COLORS[estimate.status] || ''}`}>
+            {estimate.status}
+          </span>
+        </div>
+
+        <EstimateEditor
+          estimate={JSON.parse(JSON.stringify(estimate))}
+          catalogItems={catalogItems}
+        />
+
+        <div className="mt-6 grid grid-cols-1 lg:grid-cols-3 gap-6">
+          <div className="lg:col-start-3">
+            <EstimateActions
+              estimateId={estimate.id}
+              status={estimate.status}
+              estimateNumber={estimate.estimateNumber}
+              convertedToInvoiceId={estimate.convertedToInvoiceId}
+            />
+          </div>
+        </div>
+      </div>
+    )
+  }
 
   return (
     <div className="max-w-5xl mx-auto">

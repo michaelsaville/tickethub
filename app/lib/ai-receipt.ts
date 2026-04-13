@@ -96,7 +96,7 @@ export async function scanReceipt(
   mimeType: string,
 ): Promise<ReceiptScanResult> {
   const mediaType = SUPPORTED_MEDIA_TYPES.has(mimeType) ? mimeType : 'image/jpeg'
-  const client = getAnthropic()
+  const client = await getAnthropic()
   const resp = await client.messages.create({
     model: AI_MODEL,
     max_tokens: 1500,

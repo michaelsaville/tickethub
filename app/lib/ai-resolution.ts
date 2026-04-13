@@ -63,7 +63,7 @@ export async function suggestResolution(input: {
     resolution: string | null
   }>
 }): Promise<ResolutionSuggestion> {
-  const client = getAnthropic()
+  const client = await getAnthropic()
 
   const similarBlock = input.similarTickets.length
     ? input.similarTickets

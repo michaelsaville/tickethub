@@ -2,6 +2,7 @@ import Link from 'next/link'
 import { redirect } from 'next/navigation'
 import { prisma } from '@/app/lib/prisma'
 import { requireAuth } from '@/app/lib/api-auth'
+import { getConfig } from '@/app/lib/settings'
 import { NotificationPrefsForm } from './NotificationPrefsForm'
 import { InboundForwardersForm } from './InboundForwardersForm'
 
@@ -26,7 +27,7 @@ export default async function NotificationSettingsPage() {
   if (!user) redirect('/api/auth/signin')
 
   const ntfyUrl = process.env.NTFY_URL ?? ''
-  const pushoverConfigured = Boolean(process.env.PUSHOVER_APP_TOKEN)
+  const pushoverConfigured = Boolean(await getConfig('PUSHOVER_APP_TOKEN'))
   const defaultTopic = process.env.NTFY_SHARED_TOPIC ?? 'tickethub'
 
   return (

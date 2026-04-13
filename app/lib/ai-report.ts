@@ -113,7 +113,7 @@ export async function buildReportQuery(
   prompt: string,
   today: string,
 ): Promise<ReportQuery> {
-  const client = getAnthropic()
+  const client = await getAnthropic()
   const resp = await client.messages.create({
     model: AI_MODEL,
     max_tokens: 600,

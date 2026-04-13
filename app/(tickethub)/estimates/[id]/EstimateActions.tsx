@@ -33,6 +33,19 @@ export default function EstimateActions({
     setLoading('')
   }
 
+  async function cloneEstimate() {
+    setLoading('Clone')
+    const res = await fetch(`/api/estimates/${estimateId}/clone`, { method: 'POST' })
+    if (res.ok) {
+      const data = await res.json()
+      router.push(`/estimates/${data.id}`)
+    } else {
+      const err = await res.json().catch(() => ({ error: 'Failed' }))
+      alert(err.error || 'Clone failed')
+    }
+    setLoading('')
+  }
+
   async function deleteEstimate() {
     if (!confirm(`Delete Estimate #${estimateNumber}? This cannot be undone.`)) return
     setLoading('Delete')
@@ -57,6 +70,15 @@ export default function EstimateActions({
       >
         View PDF
       </a>
+
+      {/* Clone — available on all statuses */}
+      <button
+        onClick={cloneEstimate}
+        disabled={!!loading}
+        className="th-btn-secondary w-full py-2 rounded-lg text-sm disabled:opacity-50"
+      >
+        {loading === 'Clone' ? 'Cloning...' : 'Clone Estimate'}
+      </button>
 
       {status === 'DRAFT' && (
         <>

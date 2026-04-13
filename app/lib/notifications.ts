@@ -4,6 +4,8 @@
  * See PLANNING.md §12.
  */
 
+import { getConfig } from '@/app/lib/settings'
+
 export type NotificationPriority = 'normal' | 'high' | 'critical'
 
 export interface NotifyInput {
@@ -43,7 +45,7 @@ export async function sendNtfy(input: NotifyInput): Promise<void> {
 
 export async function sendPushover(input: NotifyInput): Promise<void> {
   const { pushoverUserKey, title, body, priority = 'normal', url } = input
-  const appToken = process.env.PUSHOVER_APP_TOKEN
+  const appToken = await getConfig('PUSHOVER_APP_TOKEN')
   if (!appToken || !pushoverUserKey) return
 
   const pushoverPriority =

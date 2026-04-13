@@ -108,7 +108,7 @@ export async function classifyTicket(input: {
   clientName: string
   techNames: string[]
 }): Promise<ClassificationResult> {
-  const client = getAnthropic()
+  const client = await getAnthropic()
 
   const userMessage = [
     `Title: ${input.title}`,

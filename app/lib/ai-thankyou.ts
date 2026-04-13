@@ -100,7 +100,7 @@ export async function classifyReplyIntent(emailBody: string): Promise<{
   }
 
   try {
-    const client = getAnthropic()
+    const client = await getAnthropic()
     // Truncate very long emails — classification only needs the first bit
     const truncated =
       emailBody.length > 2000

@@ -24,24 +24,58 @@ export default async function ReportsPage() {
 
       <div className="mt-8">
         <h2 className="mb-3 font-mono text-[10px] uppercase tracking-wider text-th-text-muted">
-          Other Reports
+          Canned Reports
         </h2>
-        <a
-          href="/reports/field-activity"
-          className="th-card flex items-center gap-3 hover:border-accent/40 transition-colors"
-        >
-          <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-accent/10 text-accent text-lg">
-            📍
-          </div>
-          <div>
-            <div className="font-medium text-sm text-slate-200">
-              Field Activity
-            </div>
-            <div className="text-xs text-th-text-secondary">
-              Daily stopping points, site visits, and missed ticket alerts
-            </div>
-          </div>
-        </a>
+        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+          {[
+            {
+              href: '/reports/tech-performance',
+              icon: '📊',
+              title: 'Tech Performance',
+              desc: 'Tickets closed, resolution times, and utilization per tech',
+            },
+            {
+              href: '/reports/sla-compliance',
+              icon: '🎯',
+              title: 'SLA Compliance',
+              desc: 'Breach rates by priority and client',
+            },
+            {
+              href: '/reports/profitability',
+              icon: '💰',
+              title: 'Profitability',
+              desc: 'Revenue, costs, and margin by client, contract, or tech',
+            },
+            {
+              href: '/reports/volume-trends',
+              icon: '📈',
+              title: 'Volume Trends',
+              desc: 'Ticket inflow vs resolution over time',
+            },
+            {
+              href: '/reports/field-activity',
+              icon: '📍',
+              title: 'Field Activity',
+              desc: 'Daily stopping points, site visits, and missed tickets',
+            },
+          ].map((r) => (
+            <a
+              key={r.href}
+              href={r.href}
+              className="th-card flex items-center gap-3 hover:border-accent/40 transition-colors"
+            >
+              <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-accent/10 text-accent text-lg">
+                {r.icon}
+              </div>
+              <div>
+                <div className="font-medium text-sm text-slate-200">
+                  {r.title}
+                </div>
+                <div className="text-xs text-th-text-secondary">{r.desc}</div>
+              </div>
+            </a>
+          ))}
+        </div>
       </div>
     </div>
   )

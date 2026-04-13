@@ -37,6 +37,7 @@ model TH_Client {
   /// env var — this flag only matters when the env is ON.
   emailClientOnTicketEvents Boolean @default(true)
   syncroId      Int?     @unique // Syncro customer ID for migration dedup
+  qboCustomerId String?           // cached QBO customer ID for invoice sync
   isActive      Boolean  @default(true)
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
@@ -1017,5 +1018,45 @@ model TH_ContactPortalToken {
   createdAt   DateTime  @default(now())
 
   @@map("th_contact_portal_tokens")
+  @@schema("tickethub")
+}
+
+// ─── SETTINGS (DB-BACKED CONFIG) ─────────────────────────────────────────
+
+model TH_Setting {
+  key       String   @id
+  value     String   // AES-256-GCM encrypted
+  updatedAt DateTime @updatedAt
+
+  @@map("th_settings")
+  @@schema("tickethub")
+}
+
+// ─── QBO INTEGRATION ─────────────────────────────────────────────────────
+
+model TH_QboToken {
+  id            String   @id @default("singleton")
+  realmId       String
+  accessToken   String
+  refreshToken  String
+  expiresAt     DateTime
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  @@map("th_qbo_tokens")
+  @@schema("tickethub")
+}
+
+// ─── AMAZON PRICE CACHE ──────────────────────────────────────────────────
+
+model TH_AmazonPriceCache {
+  asin        String   @id
+  title       String
+  price       Int      // cents
+  imageUrl    String?
+  productUrl  String
+  fetchedAt   DateTime @default(now())
+
+  @@map("th_amazon_price_cache")
   @@schema("tickethub")
 }
