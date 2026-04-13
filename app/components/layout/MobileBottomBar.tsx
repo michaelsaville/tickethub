@@ -24,13 +24,23 @@ interface FabAction {
   icon: string
 }
 
-const FAB_ACTIONS: FabAction[] = [
+const FAB_ACTIONS_GLOBAL: FabAction[] = [
   { href: '/tickets/new', label: 'New ticket', icon: '🎫' },
   { href: '/clients/new', label: 'New client', icon: '👥' },
   { href: '/invoices/new', label: 'New invoice', icon: '🧾' },
   { href: '/schedule', label: 'Schedule', icon: '📅' },
   { href: '/tickets?q=', label: 'Search tickets', icon: '🔎' },
 ]
+
+/** When on a ticket detail page, show ticket-scoped actions instead. */
+function getTicketFabActions(ticketId: string): FabAction[] {
+  return [
+    { href: `#add-note`, label: 'Add Note', icon: '📝' },
+    { href: `#log-time`, label: 'Log Time', icon: '⏱️' },
+    { href: `#add-part`, label: 'Add Part', icon: '🔧' },
+    { href: `#add-photo`, label: 'Photo', icon: '📷' },
+  ]
+}
 
 const RED_BADGE_ROUTES = new Set(['/invoices', '/estimates', '/inbox'])
 
@@ -50,6 +60,13 @@ export function MobileBottomBar({
   if (ticketCount > 0) mobileBadges['/tickets'] = ticketCount
   const pathname = usePathname()
   const [open, setOpen] = useState(false)
+
+  // Detect if we're on a ticket detail page for context-aware FAB
+  const ticketMatch = pathname.match(/^\/tickets\/([^/]+)$/)
+  const isTicketDetail = ticketMatch && ticketMatch[1] !== 'new'
+  const FAB_ACTIONS = isTicketDetail
+    ? getTicketFabActions(ticketMatch![1])
+    : FAB_ACTIONS_GLOBAL
 
   // Close the speed-dial on route change so it doesn't linger after nav.
   useEffect(() => {

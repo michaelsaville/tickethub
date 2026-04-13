@@ -25,10 +25,13 @@ export function TicketFilters({
   const params = useSearchParams()
   const [q, setQ] = useState(params.get('q') ?? '')
 
+  const [tagInput, setTagInput] = useState(params.get('tag') ?? '')
+
   const current = {
     status: params.get('status') ?? '',
     priority: params.get('priority') ?? '',
     assigneeId: params.get('assigneeId') ?? '',
+    tag: params.get('tag') ?? '',
   }
 
   useEffect(() => {
@@ -100,6 +103,25 @@ export function TicketFilters({
             </option>
           ))}
       </select>
+
+      <input
+        type="text"
+        value={tagInput}
+        onChange={(e) => {
+          setTagInput(e.target.value)
+          update('tag', e.target.value.trim().toLowerCase())
+        }}
+        placeholder="Filter by tag…"
+        className="th-input w-auto max-w-[140px]"
+      />
+      {current.tag && (
+        <button
+          onClick={() => { setTagInput(''); update('tag', '') }}
+          className="text-xs text-slate-400 hover:text-slate-200"
+        >
+          Clear tag
+        </button>
+      )}
     </div>
   )
 }

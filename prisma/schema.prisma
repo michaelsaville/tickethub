@@ -812,6 +812,8 @@ model TH_Attachment {
   mimeType     String
   sizeBytes    Int
   clientOpId   String?     @unique
+  gpsLat       Float?
+  gpsLng       Float?
   createdAt    DateTime    @default(now())
 
   @@map("th_attachments")

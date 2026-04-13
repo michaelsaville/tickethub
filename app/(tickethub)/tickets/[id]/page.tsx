@@ -16,6 +16,8 @@ import { SignatureCard } from './SignatureCard'
 import { PendingCommentList } from './PendingCommentList'
 import { SuggestedResolution } from './SuggestedResolution'
 import { TodoistButton } from './TodoistButton'
+import { TagsInput } from './TagsInput'
+import { ConvertToKbButton } from './ConvertToKbButton'
 import type { ChecklistItem } from '@/app/lib/actions/checklist'
 import { getMyTimer } from '@/app/lib/actions/timer'
 
@@ -73,6 +75,7 @@ export default async function TicketDetailPage({
       attachments: { orderBy: { createdAt: 'desc' } },
       parts: { orderBy: { createdAt: 'desc' } },
       signatures: { orderBy: { createdAt: 'desc' } },
+      tags: { select: { tag: true }, orderBy: { tag: 'asc' } },
       charges: {
         orderBy: { workDate: 'desc' },
         include: {
@@ -173,6 +176,10 @@ export default async function TicketDetailPage({
               isGlobal: c.isGlobal,
             }))}
           />
+          <div className="mt-3 rounded-lg border border-th-border/50 bg-th-surface p-3">
+            <p className="mb-1.5 font-mono text-[10px] uppercase tracking-wider text-th-text-muted">Tags</p>
+            <TagsInput ticketId={ticket.id} initial={ticket.tags} />
+          </div>
           <div className="mt-4">
             <TimerControls
               ticketId={ticket.id}
@@ -300,11 +307,13 @@ export default async function TicketDetailPage({
             }
           />
 
-          <QuickCharge ticketId={ticket.id} items={items} />
+          <div id="log-time">
+            <QuickCharge ticketId={ticket.id} items={items} />
+          </div>
 
           <ReceiptScanner ticketId={ticket.id} items={items} />
 
-          <PartsCard
+          <div id="add-part"><PartsCard
             ticketId={ticket.id}
             items={items}
             initial={ticket.parts.map((p) => ({
@@ -320,11 +329,11 @@ export default async function TicketDetailPage({
               chargeId: p.chargeId,
             }))}
             showAmounts={canSeeAmounts}
-          />
+          /></div>
 
           <ChargesTable charges={ticket.charges} showAmounts={canSeeAmounts} />
 
-          <Attachments
+          <div id="add-photo"><Attachments
             ticketId={ticket.id}
             initial={ticket.attachments.map((a) => ({
               id: a.id,
@@ -333,7 +342,7 @@ export default async function TicketDetailPage({
               sizeBytes: a.sizeBytes,
               createdAt: a.createdAt,
             }))}
-          />
+          /></div>
 
           <SignatureCard
             ticketId={ticket.id}
@@ -344,7 +353,9 @@ export default async function TicketDetailPage({
             }))}
           />
 
-          <CommentComposer ticketId={ticket.id} />
+          <div id="add-note">
+            <CommentComposer ticketId={ticket.id} />
+          </div>
         </div>
 
         {/* Right: Client Context */}
@@ -390,6 +401,7 @@ export default async function TicketDetailPage({
           </div>
           <SuggestedResolution ticketId={ticket.id} />
           <TodoistButton ticketId={ticket.id} />
+          <ConvertToKbButton ticketId={ticket.id} ticketStatus={ticket.status} />
         </aside>
       </div>
     </div>

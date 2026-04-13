@@ -40,6 +40,8 @@ export async function POST(
   let originalName: string
   let mimeType: string
   let clientOpId: string | null = null
+  let gpsLat: number | null = null
+  let gpsLng: number | null = null
 
   if (isJson) {
     let payload: {
@@ -47,6 +49,8 @@ export async function POST(
       mimeType?: unknown
       base64?: unknown
       clientOpId?: unknown
+      gpsLat?: unknown
+      gpsLng?: unknown
     }
     try {
       payload = await req.json()
@@ -83,6 +87,9 @@ export async function POST(
       typeof payload.mimeType === 'string'
         ? payload.mimeType
         : 'application/octet-stream'
+    if (typeof payload.gpsLat === 'number' && Number.isFinite(payload.gpsLat)) gpsLat = payload.gpsLat
+    if (typeof payload.gpsLng === 'number' && Number.isFinite(payload.gpsLng)) gpsLng = payload.gpsLng
+
     try {
       buffer = Buffer.from(base64, 'base64')
     } catch {
@@ -118,6 +125,11 @@ export async function POST(
     buffer = Buffer.from(await file.arrayBuffer())
     originalName = file.name || 'upload.bin'
     mimeType = file.type || 'application/octet-stream'
+
+    const latStr = form.get('gpsLat')
+    const lngStr = form.get('gpsLng')
+    if (latStr && !isNaN(Number(latStr))) gpsLat = Number(latStr)
+    if (lngStr && !isNaN(Number(lngStr))) gpsLng = Number(lngStr)
   }
 
   if (buffer.length === 0) {
@@ -148,6 +160,8 @@ export async function POST(
       mimeType,
       sizeBytes: buffer.length,
       clientOpId,
+      gpsLat,
+      gpsLng,
     },
   })
 

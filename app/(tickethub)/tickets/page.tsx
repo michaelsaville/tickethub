@@ -241,6 +241,9 @@ function buildWhere(
       { description: { contains: sp.q, mode: 'insensitive' } },
     ]
   }
+  if (sp.tag) {
+    where.tags = { some: { tag: sp.tag } }
+  }
 
   return where
 }

@@ -44,18 +44,40 @@ export function Attachments({
   const [err, setErr] = useState<string | null>(null)
   const [isPending, startTransition] = useTransition()
 
+  /** Attempt GPS capture — resolves quickly with null on failure/timeout. */
+  function getGps(): Promise<{ lat: number; lng: number } | null> {
+    if (!navigator.geolocation) return Promise.resolve(null)
+    return new Promise((resolve) => {
+      const timeout = setTimeout(() => resolve(null), 3000)
+      navigator.geolocation.getCurrentPosition(
+        (pos) => { clearTimeout(timeout); resolve({ lat: pos.coords.latitude, lng: pos.coords.longitude }) },
+        () => { clearTimeout(timeout); resolve(null) },
+        { timeout: 2500, maximumAge: 60_000 },
+      )
+    })
+  }
+
   async function handleUpload(e: ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0]
     if (!file) return
     setErr(null)
     setUploading(true)
     try {
+      // Capture GPS for image uploads (fire in parallel with upload prep)
+      const isImage = file.type.startsWith('image/')
+      const gpsPromise = isImage ? getGps() : Promise.resolve(null)
+
       // Files larger than the queue cap go straight through multipart —
       // base64 in IndexedDB balloons ~33% and blows the quota. Those
       // uploads still fail offline, but at least they don't crash Dexie.
       if (file.size > MAX_QUEUE_SIZE) {
+        const [gps] = await Promise.all([gpsPromise])
         const fd = new FormData()
         fd.append('file', file)
+        if (gps) {
+          fd.append('gpsLat', String(gps.lat))
+          fd.append('gpsLng', String(gps.lng))
+        }
         const res = await fetch(`/api/tickets/${ticketId}/attachments`, {
           method: 'POST',
           body: fd,
@@ -79,7 +101,7 @@ export function Attachments({
         return
       }
 
-      const base64 = await fileToBase64(file)
+      const [base64, gps] = await Promise.all([fileToBase64(file), gpsPromise])
       const result = await enqueueRequest({
         type: 'ATTACH_PHOTO',
         entityType: 'TICKET',
@@ -89,6 +111,7 @@ export function Attachments({
           filename: file.name || 'upload.bin',
           mimeType: file.type || 'application/octet-stream',
           base64,
+          ...(gps ? { gpsLat: gps.lat, gpsLng: gps.lng } : {}),
         },
       })
       if (result.synced) {

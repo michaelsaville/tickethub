@@ -1004,7 +1004,7 @@ model TH_Notification {
 - [x] User management and role assignment
 - [x] Basic dashboard (tech view: my queue, manager view: team overview)
 - [x] SLA policy configuration and countdown timers
-- [~] Ticket tagging — *schema exists (TH_TicketTag), no UI to add/remove/filter by tags*
+- [x] Ticket tagging (TagsInput on detail page, tag filter on ticket list, add/remove/autocomplete)
 
 ### Phase 2 — Time, Billing & Parts ✅
 *Goal: Complete the ticket → invoice → email flow*
@@ -1033,10 +1033,10 @@ model TH_Notification {
 - [x] Optimistic UI for all field operations (pending comments store, sync-op-completed events)
 - [x] Sync status indicator (persistent) (SyncStatusBadge.tsx, fixed bottom-right)
 - [x] Mobile bottom tab navigation (MobileBottomBar.tsx, 5-tab)
-- [~] Expandable FAB — *implemented as global nav (new ticket/client/invoice/search), not ticket-scoped actions (note/time/part/photo/status)*
+- [x] Expandable FAB (context-aware: global nav when browsing, ticket-scoped actions on ticket detail — note/time/part/photo)
 - [x] Swipe gestures on ticket list (right=resolve, left=waiting customer)
 - [x] Customer signature capture (canvas + GPS tagging)
-- [~] Camera integration with GPS tagging — *camera capture works on mobile, GPS tagging only on signatures not photo attachments*
+- [x] Camera integration with GPS tagging (geolocation captured on image uploads + signatures, stored as gpsLat/gpsLng)
 - [x] Voice-to-text in note fields (Web Speech API via useVoiceInput hook)
 - [x] Push notifications (ntfy + Pushover) (mode-aware: ON_CALL/WORKING/OFF_DUTY)
 - [x] Notification preference management per user (mode, ntfyTopic, pushoverToken)
@@ -1049,7 +1049,7 @@ model TH_Notification {
 - [x] Natural language ticket search (Smart Ticket Search) (NL → Prisma filters)
 - [x] AI suggested resolution steps from ticket history (similar resolved ticket lookup)
 - [x] AI-assisted report builder (natural language → query) (tickets or summary groupBy)
-- [ ] Ticket → Knowledge Base one-click conversion — *not implemented, no TH_KBArticle model in schema*
+- [x] Ticket → Knowledge Base one-click conversion (button on resolved/closed tickets, KB list at /kb with search + tag filter)
 - [x] AI-powered "thank you" detection on closed tickets (pattern shortcircuit + Claude fallback)
 
 ### Phase 5 — Integrations & Extensions
