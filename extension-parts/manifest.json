@@ -1,0 +1,41 @@
+{
+  "manifest_version": 3,
+  "name": "TicketHub Parts Scraper",
+  "version": "1.0.0",
+  "description": "Scrape parts from Amazon Business and add them to TicketHub tickets.",
+  "permissions": ["activeTab", "storage"],
+  "host_permissions": [
+    "https://www.amazon.com/*",
+    "https://business.amazon.com/*",
+    "https://smile.amazon.com/*"
+  ],
+  "action": {
+    "default_popup": "popup.html",
+    "default_icon": {
+      "16": "icons/icon16.png",
+      "48": "icons/icon48.png",
+      "128": "icons/icon128.png"
+    }
+  },
+  "content_scripts": [
+    {
+      "matches": [
+        "https://www.amazon.com/dp/*",
+        "https://www.amazon.com/*/dp/*",
+        "https://www.amazon.com/gp/product/*",
+        "https://business.amazon.com/dp/*",
+        "https://business.amazon.com/*/dp/*",
+        "https://business.amazon.com/gp/product/*",
+        "https://smile.amazon.com/dp/*",
+        "https://smile.amazon.com/*/dp/*"
+      ],
+      "js": ["content.js"],
+      "run_at": "document_idle"
+    }
+  ],
+  "icons": {
+    "16": "icons/icon16.png",
+    "48": "icons/icon48.png",
+    "128": "icons/icon128.png"
+  }
+}

@@ -5,6 +5,7 @@ import { requireAuth } from '@/app/lib/api-auth'
 import { getConfig } from '@/app/lib/settings'
 import { NotificationPrefsForm } from './NotificationPrefsForm'
 import { InboundForwardersForm } from './InboundForwardersForm'
+import { IntegrationTokensForm } from './IntegrationTokensForm'
 
 export const dynamic = 'force-dynamic'
 
@@ -22,6 +23,8 @@ export default async function NotificationSettingsPage() {
       pushoverToken: true,
       notificationMode: true,
       inboundForwardEmails: true,
+      togglToken: true,
+      todoistToken: true,
     },
   })
   if (!user) redirect('/api/auth/signin')
@@ -61,6 +64,13 @@ export default async function NotificationSettingsPage() {
 
       <div className="mt-8">
         <InboundForwardersForm initial={user.inboundForwardEmails ?? []} />
+      </div>
+
+      <div className="mt-8">
+        <IntegrationTokensForm
+          initialToggl={user.togglToken ?? ''}
+          initialTodoist={user.todoistToken ?? ''}
+        />
       </div>
     </div>
   )

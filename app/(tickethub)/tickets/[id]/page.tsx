@@ -15,6 +15,7 @@ import { ChecklistCard } from './ChecklistCard'
 import { SignatureCard } from './SignatureCard'
 import { PendingCommentList } from './PendingCommentList'
 import { SuggestedResolution } from './SuggestedResolution'
+import { TodoistButton } from './TodoistButton'
 import type { ChecklistItem } from '@/app/lib/actions/checklist'
 import { getMyTimer } from '@/app/lib/actions/timer'
 
@@ -388,6 +389,7 @@ export default async function TicketDetailPage({
             )}
           </div>
           <SuggestedResolution ticketId={ticket.id} />
+          <TodoistButton ticketId={ticket.id} />
         </aside>
       </div>
     </div>

@@ -1055,16 +1055,16 @@ model TH_Notification {
 ### Phase 5 — Integrations & Extensions
 *Goal: TicketHub connects to the rest of the MSP stack*
 
-- [ ] Browser Extension — Amazon Business parts scraper — *not started, no extension-parts/ directory*
-- [ ] Browser Extension — Invoice/receipt capture from email — *not started, no extension-invoice/ directory*
+- [x] Browser Extension — Amazon Business parts scraper (extension-parts/ directory, content script + popup, POSTs to /api/tickets/:id/parts)
+- [~] ~~Browser Extension — Invoice/receipt capture from email~~ — *dropped: fuel receipt scanner + M365 inbound email pipeline cover the core workflows*
 - [x] QuickBooks integration (invoice sync, chart of accounts) (OAuth flow + invoice push)
-- [ ] Xero integration (alternative to QuickBooks) — *not started*
+- [~] ~~Xero integration~~ — *dropped: PCC2K uses QuickBooks, not Xero*
 - [x] Microsoft 365 email → ticket creation (webhook) (Graph subscriptions + auto-renewal cron)
 - [x] ConnectWise RMM → ticket creation (webhook + secret validation + severity→priority mapping)
-- [ ] NinjaOne RMM → ticket creation (alert-based) — *not started*
-- [ ] Toggl per-user sync (optional, per-user API token) — *not started*
-- [ ] Todoist task creation from tickets (optional, per-user) — *not started*
-- [~] SyncroMSP asset sync — *estimate polling + migration tool exist, not real-time asset sync*
+- [~] ~~NinjaOne RMM → ticket creation~~ — *dropped: PCC2K does not use NinjaOne*
+- [x] Toggl per-user sync (timer start/stop syncs to Toggl via API token, fire-and-forget)
+- [x] Todoist task creation from tickets ("Create Todoist Task" button on ticket detail, per-user API token)
+- [~] ~~SyncroMSP asset sync~~ — *dropped: assets live in DocHub, not TicketHub. Tickets link to DocHub assets via cross-app URL. Syncro migration tool exists for one-time data import.*
 - [x] Amazon PA-API product lookup (search + ASIN lookup with caching)
 
 ### Phase 6 — Reporting & Analytics ✅

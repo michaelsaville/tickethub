@@ -5,6 +5,7 @@ import { getServerSession } from 'next-auth'
 import { prisma } from '@/app/lib/prisma'
 import { authOptions } from '@/app/lib/auth'
 import { createCharge } from '@/app/lib/actions/charges'
+import { startTogglEntry, stopTogglEntry } from '@/app/lib/toggl'
 
 export type TimerResult =
   | { ok: true }
@@ -86,6 +87,17 @@ export async function startTimer(
         note: note?.trim() || null,
       },
     })
+
+    // Sync to Toggl if user has a token configured (fire-and-forget)
+    const ticketInfo = await prisma.tH_Ticket.findUnique({
+      where: { id: ticketId },
+      select: { ticketNumber: true, title: true },
+    })
+    startTogglEntry(
+      userId,
+      `#${ticketInfo?.ticketNumber ?? '?'} ${ticketInfo?.title ?? 'Ticket'}`,
+    ).catch(() => {})
+
     revalidatePath(`/tickets/${ticketId}`)
     revalidatePath('/', 'layout')
     return { ok: true }
@@ -135,6 +147,8 @@ export async function cancelTimer(): Promise<TimerResult> {
       where: { userId },
     })
     if (!existing) return { ok: true }
+    // Stop Toggl entry if running (fire-and-forget)
+    stopTogglEntry(userId).catch(() => {})
     await prisma.tH_TicketTimer.delete({ where: { userId } })
     revalidatePath(`/tickets/${existing.ticketId}`)
     revalidatePath('/', 'layout')
@@ -175,6 +189,9 @@ export async function stopTimerAndCharge(
       description: description?.trim() || timer.note || null,
     })
     if (!chargeRes.ok) return chargeRes
+
+    // Stop Toggl entry if running (fire-and-forget)
+    stopTogglEntry(userId).catch(() => {})
 
     await prisma.tH_TicketTimer.delete({ where: { userId } })
     revalidatePath(`/tickets/${timer.ticketId}`)
