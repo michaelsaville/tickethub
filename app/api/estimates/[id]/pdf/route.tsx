@@ -1,5 +1,6 @@
+import type { ReactElement } from 'react'
 import { NextResponse, type NextRequest } from 'next/server'
-import { renderToBuffer } from '@react-pdf/renderer'
+import { renderToBuffer, type DocumentProps } from '@react-pdf/renderer'
 import { prisma } from '@/app/lib/prisma'
 import { requireAuth } from '@/app/lib/api-auth'
 import { EstimatePdf, type EstimatePdfData } from '@/app/lib/pdf/EstimatePdf'
@@ -54,13 +55,18 @@ export async function GET(
     })),
   }
 
-  const buf = await renderToBuffer(<EstimatePdf data={data} />)
+  const element = EstimatePdf({ data }) as ReactElement<DocumentProps>
+  const buffer = await renderToBuffer(element)
 
   const download = req.nextUrl.searchParams.get('download') === '1'
-  return new NextResponse(buf, {
-    headers: {
-      'Content-Type': 'application/pdf',
-      'Content-Disposition': `${download ? 'attachment' : 'inline'}; filename="Estimate_${estimate.estimateNumber}.pdf"`,
-    },
-  })
+  return new NextResponse(
+    new Blob([new Uint8Array(buffer)], { type: 'application/pdf' }),
+    {
+      status: 200,
+      headers: {
+        'Content-Type': 'application/pdf',
+        'Content-Disposition': `${download ? 'attachment' : 'inline'}; filename="Estimate_${estimate.estimateNumber}.pdf"`,
+      },
+    }
+  )
 }

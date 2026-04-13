@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server'
 import { prisma } from '@/app/lib/prisma'
-import { requireAuth } from '@/app/lib/auth'
+import { requireAuth } from '@/app/lib/api-auth'
 
 // GET /api/estimates/[id] — estimate detail
 export async function GET(

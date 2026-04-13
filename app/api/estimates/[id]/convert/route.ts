@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server'
 import { prisma } from '@/app/lib/prisma'
-import { requireAuth } from '@/app/lib/auth'
+import { requireAuth } from '@/app/lib/api-auth'
 
 // POST /api/estimates/[id]/convert — convert approved estimate to invoice
 export async function POST(

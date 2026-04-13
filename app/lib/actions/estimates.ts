@@ -1,7 +1,7 @@
 import 'server-only'
 import { prisma } from '@/app/lib/prisma'
 import { formatCents } from '@/app/lib/billing'
-import { sendMail } from '@/app/lib/mail'
+import { sendMail } from '@/app/lib/m365'
 
 type EstimateWithRelations = {
   id: string
@@ -86,7 +86,7 @@ export async function sendEstimateEmail(estimate: EstimateWithRelations) {
   `
 
   await sendMail({
-    to: recipientEmail,
+    to: [recipientEmail],
     subject: `Estimate #${estimate.estimateNumber}: ${estimate.title} — ${formatCents(estimate.totalAmount)}`,
     html,
   })

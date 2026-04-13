@@ -24,7 +24,7 @@ export async function POST(
     include: { contact: { select: { clientId: true } } },
   })
 
-  if (!portalToken || portalToken.expiresAt < new Date()) {
+  if (!portalToken || (portalToken.expiresAt && portalToken.expiresAt < new Date())) {
     return NextResponse.json({ error: 'Invalid or expired token' }, { status: 401 })
   }
 
@@ -72,7 +72,7 @@ export async function GET(
     include: { contact: { select: { clientId: true, firstName: true, lastName: true } } },
   })
 
-  if (!portalToken || portalToken.expiresAt < new Date()) {
+  if (!portalToken || (portalToken.expiresAt && portalToken.expiresAt < new Date())) {
     return NextResponse.json({ error: 'Invalid or expired token' }, { status: 401 })
   }
 

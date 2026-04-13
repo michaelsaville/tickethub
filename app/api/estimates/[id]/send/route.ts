@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server'
 import { prisma } from '@/app/lib/prisma'
-import { requireAuth } from '@/app/lib/auth'
+import { requireAuth } from '@/app/lib/api-auth'
 import { sendEstimateEmail } from '@/app/lib/actions/estimates'
 
 // POST /api/estimates/[id]/send — send estimate to client
