@@ -55,6 +55,16 @@ const GROUPS = [
       },
     ],
   },
+  {
+    title: 'Migration',
+    items: [
+      {
+        href: '/admin/syncro-migrate',
+        title: 'Syncro Migration',
+        description: 'Import customers, contacts, sites, and tickets from Syncro',
+      },
+    ],
+  },
 ] as const
 
 export default async function SettingsPage() {

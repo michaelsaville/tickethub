@@ -323,6 +323,8 @@ model TH_Ticket {
 
   checklist Json?
 
+  syncroId  Int?      @unique // Syncro ticket ID for migration dedup
+
   closedAt  DateTime?
   deletedAt DateTime?
   createdAt DateTime  @default(now())

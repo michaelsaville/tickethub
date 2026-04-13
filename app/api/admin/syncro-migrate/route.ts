@@ -1,16 +1,41 @@
 import { NextResponse } from 'next/server'
 import { prisma } from '@/app/lib/prisma'
 import { requireAuth } from '@/app/lib/api-auth'
-import { syncroFetch, syncroConfigured } from '@/app/lib/syncro'
+import { syncroConfigured } from '@/app/lib/syncro'
+import {
+  migrateCustomers,
+  migrateContacts,
+  migrateSites,
+  migrateTickets,
+  runFullMigration,
+} from '@/app/lib/syncro-migrate'
+
+/**
+ * GET /api/admin/syncro-migrate
+ *
+ * Returns current migration stats — how many records have a Syncro source ID.
+ */
+export async function GET() {
+  const { error } = await requireAuth('GLOBAL_ADMIN')
+  if (error) return error
+
+  const [clients, contacts, sites, tickets] = await Promise.all([
+    prisma.tH_Client.count({ where: { syncroId: { not: null } } }),
+    prisma.tH_Contact.count({ where: { syncroContactId: { not: null } } }),
+    prisma.tH_Site.count({ where: { syncroSiteId: { not: null } } }),
+    prisma.tH_Ticket.count({ where: { syncroId: { not: null } } }),
+  ])
+
+  return NextResponse.json({
+    configured: syncroConfigured(),
+    stats: { clients, contacts, sites, tickets },
+  })
+}
 
 /**
  * POST /api/admin/syncro-migrate
  *
- * Pull customers, contacts, and service addresses from Syncro and
- * upsert into TicketHub. Uses syncroId/syncroContactId/syncroSiteId
- * for deduplication — safe to run multiple times.
- *
- * Also auto-creates a Global Contract for each new client.
+ * Run a migration scope: customers, contacts, sites, tickets, or all.
  */
 export async function POST(req: Request) {
   const { error } = await requireAuth('GLOBAL_ADMIN')
@@ -20,189 +45,44 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: 'Syncro not configured' }, { status: 422 })
   }
 
-  const results = {
-    clients: { created: 0, updated: 0, errors: [] as string[] },
-    contacts: { created: 0, updated: 0, errors: [] as string[] },
-    sites: { created: 0, updated: 0, errors: [] as string[] },
+  let scope: string
+  try {
+    const body = await req.json()
+    scope = body.scope ?? 'all'
+  } catch {
+    scope = 'all'
   }
 
-  // ── 1. Fetch all customers from Syncro ────────────────────────────────
-  const customers = await fetchAllPages('/customers')
-
-  for (const c of customers) {
-    if (c.disabled) continue
-
-    try {
-      const name = c.business_name?.trim() || c.fullname || `Customer ${c.id}`
-      const billingState = c.state?.trim()?.toUpperCase()?.slice(0, 2) || null
-
-      const existing = await prisma.tH_Client.findUnique({
-        where: { syncroId: c.id },
-      })
-
-      if (existing) {
-        await prisma.tH_Client.update({
-          where: { id: existing.id },
-          data: { name, billingState: billingState || undefined },
-        })
-        results.clients.updated++
-      } else {
-        const client = await prisma.tH_Client.create({
-          data: {
-            name,
-            syncroId: c.id,
-            billingState,
-            billingEmail: c.email?.trim() || null,
-          },
-        })
-
-        // Auto-create Global Contract
-        await prisma.tH_Contract.create({
-          data: {
-            clientId: client.id,
-            name: 'Global',
-            type: 'GLOBAL',
-            status: 'ACTIVE',
-            isGlobal: true,
-          },
-        })
-
-        results.clients.created++
-      }
-    } catch (e: any) {
-      results.clients.errors.push(`Customer ${c.id}: ${e.message}`)
+  try {
+    if (scope === 'all') {
+      const results = await runFullMigration()
+      return NextResponse.json({ success: true, scope, ...results })
     }
-  }
 
-  // ── 2. Fetch contacts per customer ────────────────────────────────────
-  for (const c of customers) {
-    if (c.disabled) continue
-
-    const thClient = await prisma.tH_Client.findUnique({
-      where: { syncroId: c.id },
-      select: { id: true },
-    })
-    if (!thClient) continue
-
-    try {
-      const contacts = await fetchAllPages(`/customers/${c.id}/contacts`)
-
-      for (const con of contacts) {
-        try {
-          const existing = await prisma.tH_Contact.findUnique({
-            where: { syncroContactId: con.id },
-          })
-
-          const data = {
-            firstName: con.first_name?.trim() || con.name?.split(' ')[0] || 'Unknown',
-            lastName: con.last_name?.trim() || con.name?.split(' ').slice(1).join(' ') || '',
-            email: con.email?.trim() || null,
-            phone: con.phone?.trim() || con.mobile?.trim() || null,
-            jobTitle: con.title?.trim() || null,
-          }
-
-          if (existing) {
-            await prisma.tH_Contact.update({
-              where: { id: existing.id },
-              data,
-            })
-            results.contacts.updated++
-          } else {
-            await prisma.tH_Contact.create({
-              data: {
-                clientId: thClient.id,
-                syncroContactId: con.id,
-                isPrimary: con.primary ?? false,
-                ...data,
-              },
-            })
-            results.contacts.created++
-          }
-        } catch (e: any) {
-          results.contacts.errors.push(`Contact ${con.id}: ${e.message}`)
-        }
-      }
-    } catch (e: any) {
-      results.contacts.errors.push(`Customer ${c.id} contacts: ${e.message}`)
+    let result
+    switch (scope) {
+      case 'customers':
+        result = await migrateCustomers()
+        break
+      case 'contacts':
+        result = await migrateContacts()
+        break
+      case 'sites':
+        result = await migrateSites()
+        break
+      case 'tickets':
+        result = await migrateTickets()
+        break
+      default:
+        return NextResponse.json({ error: `Unknown scope: ${scope}` }, { status: 400 })
     }
+
+    return NextResponse.json({ success: true, scope, [scope]: result })
+  } catch (e: any) {
+    console.error('[syncro-migrate] Migration failed:', e)
+    return NextResponse.json(
+      { error: e.message || 'Migration failed' },
+      { status: 500 },
+    )
   }
-
-  // ── 3. Fetch service addresses (sites) ─────────────────────────────────
-  for (const c of customers) {
-    if (c.disabled) continue
-
-    const thClient = await prisma.tH_Client.findUnique({
-      where: { syncroId: c.id },
-      select: { id: true },
-    })
-    if (!thClient) continue
-
-    // Syncro embeds addresses in the customer object
-    // Create a primary site from the customer's address
-    if (c.address || c.city) {
-      try {
-        const siteId = c.id * 10000 // deterministic ID for primary address
-        const existing = await prisma.tH_Site.findUnique({
-          where: { syncroSiteId: siteId },
-        })
-
-        const data = {
-          name: 'Primary Site',
-          address: [c.address, c.address_2].filter(Boolean).join(', ') || null,
-          city: c.city?.trim() || null,
-          state: c.state?.trim() || null,
-          zip: c.zip?.trim() || null,
-        }
-
-        if (existing) {
-          await prisma.tH_Site.update({ where: { id: existing.id }, data })
-          results.sites.updated++
-        } else {
-          await prisma.tH_Site.create({
-            data: {
-              clientId: thClient.id,
-              syncroSiteId: siteId,
-              ...data,
-            },
-          })
-          results.sites.created++
-        }
-      } catch (e: any) {
-        results.sites.errors.push(`Customer ${c.id} primary site: ${e.message}`)
-      }
-    }
-  }
-
-  return NextResponse.json({
-    success: true,
-    ...results,
-    totals: {
-      clientsProcessed: customers.filter((c: any) => !c.disabled).length,
-      contactsFetched: results.contacts.created + results.contacts.updated,
-      sitesFetched: results.sites.created + results.sites.updated,
-    },
-  })
-}
-
-// ── Syncro paginated fetch helper ────────────────────────────────────────
-
-async function fetchAllPages(endpoint: string): Promise<any[]> {
-  const all: any[] = []
-  let page = 1
-  let totalPages = 1
-
-  while (page <= totalPages) {
-    const res = await syncroFetch(`${endpoint}?page=${page}&per_page=100`)
-    if (!res.ok) {
-      console.error(`[syncro-migrate] ${endpoint} page ${page} failed: ${res.status}`)
-      break
-    }
-    const json = await res.json()
-    const key = Object.keys(json).find(k => Array.isArray(json[k]) && k !== 'meta')
-    if (key) all.push(...json[key])
-    totalPages = json.meta?.total_pages ?? 1
-    page++
-  }
-
-  return all
 }

@@ -1,0 +1,409 @@
+import 'server-only'
+
+import { prisma } from '@/app/lib/prisma'
+import { syncroFetch, syncroConfigured } from '@/app/lib/syncro'
+import type {
+  TH_TicketStatus,
+  TH_TicketPriority,
+  TH_TicketType,
+} from '@prisma/client'
+
+// ── Types ─────────────────────────────────────────────────────────────────
+
+export interface MigrationResult {
+  imported: number
+  skipped: number
+  errors: string[]
+}
+
+export interface FullMigrationResult {
+  customers: MigrationResult
+  contacts: MigrationResult
+  sites: MigrationResult
+  tickets: MigrationResult
+}
+
+// ── Status / Priority / Type mappings ─────────────────────────────────────
+
+function mapStatus(raw: string | null | undefined): { status: TH_TicketStatus; board: string | null } {
+  if (!raw) return { status: 'OPEN', board: null }
+
+  let board: string | null = null
+  let keyword = raw.trim()
+
+  if (keyword.includes('|')) {
+    const parts = keyword.split('|')
+    board = parts[0].trim() || null
+    keyword = parts.slice(1).join('|').trim()
+  }
+
+  const lower = keyword.toLowerCase()
+
+  let status: TH_TicketStatus
+  if (lower === 'new') {
+    status = 'NEW'
+  } else if (lower === 'in progress') {
+    status = 'IN_PROGRESS'
+  } else if (lower === 'pending review' || lower === 'customer reply') {
+    status = 'OPEN'
+  } else if (lower === 'waiting on customer') {
+    status = 'WAITING_CUSTOMER'
+  } else if (lower === 'scheduled') {
+    status = 'OPEN'
+  } else if (lower === 'pending parts' || lower === 'hold') {
+    status = 'WAITING_THIRD_PARTY'
+  } else if (lower === 'resolved') {
+    status = 'RESOLVED'
+  } else {
+    status = 'OPEN'
+  }
+
+  return { status, board }
+}
+
+function mapPriority(_raw: string | null | undefined): TH_TicketPriority {
+  return 'MEDIUM'
+}
+
+function mapType(raw: string | null | undefined): TH_TicketType {
+  if (!raw) return 'INCIDENT'
+  const lower = raw.trim().toLowerCase()
+  if (lower === 'maintenance' || lower === 'regular maintenance') return 'MAINTENANCE'
+  if (lower === 'remote support') return 'SERVICE_REQUEST'
+  return 'INCIDENT'
+}
+
+// ── Syncro paginated fetch ────────────────────────────────────────────────
+
+async function fetchAllPages(endpoint: string, perPage = 100, maxPages = 200): Promise<any[]> {
+  const all: any[] = []
+  let page = 1
+  let totalPages = 1
+
+  while (page <= totalPages && page <= maxPages) {
+    const sep = endpoint.includes('?') ? '&' : '?'
+    const res = await syncroFetch(`${endpoint}${sep}page=${page}&per_page=${perPage}`)
+    if (!res.ok) {
+      console.error(`[syncro-migrate] ${endpoint} page ${page} failed: ${res.status}`)
+      break
+    }
+    const json = await res.json()
+    const key = Object.keys(json).find(k => Array.isArray(json[k]) && k !== 'meta')
+    if (key) all.push(...json[key])
+    totalPages = json.meta?.total_pages ?? 1
+    page++
+  }
+
+  return all
+}
+
+// ── Migrate Customers ─────────────────────────────────────────────────────
+
+export async function migrateCustomers(): Promise<MigrationResult> {
+  if (!syncroConfigured()) throw new Error('Syncro not configured')
+
+  const result: MigrationResult = { imported: 0, skipped: 0, errors: [] }
+  const customers = await fetchAllPages('/customers')
+
+  for (const c of customers) {
+    if (c.disabled) {
+      result.skipped++
+      continue
+    }
+
+    try {
+      const existing = await prisma.tH_Client.findUnique({
+        where: { syncroId: c.id },
+      })
+
+      if (existing) {
+        result.skipped++
+        continue
+      }
+
+      const name =
+        c.business_name?.trim() ||
+        [c.firstname, c.lastname].filter(Boolean).join(' ').trim() ||
+        c.fullname?.trim() ||
+        `Customer ${c.id}`
+
+      const billingState = c.state?.trim()?.toUpperCase()?.slice(0, 2) || null
+
+      const client = await prisma.tH_Client.create({
+        data: {
+          name,
+          syncroId: c.id,
+          billingState,
+          billingEmail: c.email?.trim() || null,
+        },
+      })
+
+      // Auto-create Global Contract
+      await prisma.tH_Contract.create({
+        data: {
+          clientId: client.id,
+          name: 'Global',
+          type: 'GLOBAL',
+          status: 'ACTIVE',
+          isGlobal: true,
+        },
+      })
+
+      result.imported++
+    } catch (e: any) {
+      result.errors.push(`Customer ${c.id}: ${e.message}`)
+    }
+  }
+
+  return result
+}
+
+// ── Migrate Contacts ──────────────────────────────────────────────────────
+
+export async function migrateContacts(): Promise<MigrationResult> {
+  if (!syncroConfigured()) throw new Error('Syncro not configured')
+
+  const result: MigrationResult = { imported: 0, skipped: 0, errors: [] }
+
+  const clients = await prisma.tH_Client.findMany({
+    where: { syncroId: { not: null } },
+    select: { id: true, syncroId: true },
+  })
+
+  for (const client of clients) {
+    try {
+      const contacts = await fetchAllPages(`/customers/${client.syncroId}/contacts`)
+
+      for (const con of contacts) {
+        try {
+          const existing = await prisma.tH_Contact.findUnique({
+            where: { syncroContactId: con.id },
+          })
+
+          if (existing) {
+            result.skipped++
+            continue
+          }
+
+          const firstName =
+            con.first_name?.trim() || con.name?.split(' ')[0]?.trim() || 'Unknown'
+          const lastName =
+            con.last_name?.trim() || con.name?.split(' ').slice(1).join(' ').trim() || ''
+
+          await prisma.tH_Contact.create({
+            data: {
+              clientId: client.id,
+              syncroContactId: con.id,
+              firstName,
+              lastName,
+              email: con.email?.trim() || null,
+              phone: con.phone?.trim() || con.mobile?.trim() || null,
+              jobTitle: con.title?.trim() || null,
+              isPrimary: con.primary ?? false,
+            },
+          })
+
+          result.imported++
+        } catch (e: any) {
+          result.errors.push(`Contact ${con.id}: ${e.message}`)
+        }
+      }
+    } catch (e: any) {
+      result.errors.push(`Customer ${client.syncroId} contacts: ${e.message}`)
+    }
+  }
+
+  return result
+}
+
+// ── Migrate Sites ─────────────────────────────────────────────────────────
+
+export async function migrateSites(): Promise<MigrationResult> {
+  if (!syncroConfigured()) throw new Error('Syncro not configured')
+
+  const result: MigrationResult = { imported: 0, skipped: 0, errors: [] }
+
+  const clients = await prisma.tH_Client.findMany({
+    where: { syncroId: { not: null } },
+    select: { id: true, syncroId: true },
+  })
+
+  for (const client of clients) {
+    try {
+      const res = await syncroFetch(`/customers/${client.syncroId}/addresses`)
+      if (!res.ok) {
+        result.errors.push(`Customer ${client.syncroId} addresses: HTTP ${res.status}`)
+        continue
+      }
+      const json = await res.json()
+      const addresses: any[] = json.addresses ?? json.customer_addresses ?? []
+
+      for (const addr of addresses) {
+        try {
+          const existing = await prisma.tH_Site.findUnique({
+            where: { syncroSiteId: addr.id },
+          })
+
+          if (existing) {
+            result.skipped++
+            continue
+          }
+
+          await prisma.tH_Site.create({
+            data: {
+              clientId: client.id,
+              syncroSiteId: addr.id,
+              name: addr.name?.trim() || 'Site',
+              address: [addr.address1, addr.address2].filter(Boolean).join(', ') || null,
+              city: addr.city?.trim() || null,
+              state: addr.state?.trim() || null,
+              zip: addr.zip?.trim() || null,
+            },
+          })
+
+          result.imported++
+        } catch (e: any) {
+          result.errors.push(`Address ${addr.id}: ${e.message}`)
+        }
+      }
+    } catch (e: any) {
+      result.errors.push(`Customer ${client.syncroId} addresses: ${e.message}`)
+    }
+  }
+
+  return result
+}
+
+// ── Migrate Tickets ───────────────────────────────────────────────────────
+
+export async function migrateTickets(): Promise<MigrationResult> {
+  if (!syncroConfigured()) throw new Error('Syncro not configured')
+
+  const result: MigrationResult = { imported: 0, skipped: 0, errors: [] }
+
+  // Find the system user (oldest GLOBAL_ADMIN) for createdById
+  const systemUser = await prisma.tH_User.findFirst({
+    where: { role: 'GLOBAL_ADMIN', isActive: true },
+    orderBy: { createdAt: 'asc' },
+    select: { id: true },
+  })
+
+  if (!systemUser) {
+    result.errors.push('No GLOBAL_ADMIN user found to use as ticket creator')
+    return result
+  }
+
+  // Build lookup of syncroId → TH_Client.id
+  const clients = await prisma.tH_Client.findMany({
+    where: { syncroId: { not: null } },
+    select: { id: true, syncroId: true },
+  })
+  const clientMap = new Map(clients.map(c => [c.syncroId!, c.id]))
+
+  // Paginate through Syncro tickets (up to 100 pages at 50/page = 5000)
+  const tickets = await fetchAllPages('/tickets', 50, 100)
+
+  for (const t of tickets) {
+    try {
+      // Check dedup
+      const existing = await prisma.tH_Ticket.findUnique({
+        where: { syncroId: t.id },
+      })
+
+      if (existing) {
+        result.skipped++
+        continue
+      }
+
+      // Match client
+      const clientId = clientMap.get(t.customer_id)
+      if (!clientId) {
+        result.skipped++
+        continue
+      }
+
+      const { status, board } = mapStatus(t.status)
+      const priority = mapPriority(t.priority)
+      const type = mapType(t.problem_type)
+
+      const closedAt =
+        status === 'RESOLVED' && t.resolved_at
+          ? new Date(t.resolved_at)
+          : null
+
+      const ticket = await prisma.tH_Ticket.create({
+        data: {
+          clientId,
+          createdById: systemUser.id,
+          title: t.subject?.trim() || `Syncro Ticket #${t.number || t.id}`,
+          status,
+          priority,
+          type,
+          board: board || null,
+          syncroId: t.id,
+          closedAt,
+          createdAt: t.created_at ? new Date(t.created_at) : undefined,
+        },
+      })
+
+      // Import comments
+      const comments: any[] = t.comments ?? []
+      for (const comment of comments) {
+        try {
+          const body =
+            comment.rich_text_preview?.trim() ||
+            comment.body?.trim() ||
+            ''
+          if (!body) continue
+
+          await prisma.tH_TicketComment.create({
+            data: {
+              ticketId: ticket.id,
+              authorId: systemUser.id,
+              body,
+              isInternal: comment.hidden ?? false,
+              createdAt: comment.created_at
+                ? new Date(comment.created_at)
+                : undefined,
+            },
+          })
+        } catch (e: any) {
+          // Non-fatal: log but don't fail the ticket
+          console.error(`[syncro-migrate] Comment on ticket ${t.id}: ${e.message}`)
+        }
+      }
+
+      result.imported++
+    } catch (e: any) {
+      result.errors.push(`Ticket ${t.id}: ${e.message}`)
+    }
+  }
+
+  return result
+}
+
+// ── Full Migration ────────────────────────────────────────────────────────
+
+export async function runFullMigration(
+  onProgress?: (msg: string) => void,
+): Promise<FullMigrationResult> {
+  const log = onProgress ?? (() => {})
+
+  log('Starting customer migration...')
+  const customers = await migrateCustomers()
+  log(`Customers done: ${customers.imported} imported, ${customers.skipped} skipped`)
+
+  log('Starting contact migration...')
+  const contacts = await migrateContacts()
+  log(`Contacts done: ${contacts.imported} imported, ${contacts.skipped} skipped`)
+
+  log('Starting site migration...')
+  const sites = await migrateSites()
+  log(`Sites done: ${sites.imported} imported, ${sites.skipped} skipped`)
+
+  log('Starting ticket migration...')
+  const tickets = await migrateTickets()
+  log(`Tickets done: ${tickets.imported} imported, ${tickets.skipped} skipped`)
+
+  return { customers, contacts, sites, tickets }
+}
