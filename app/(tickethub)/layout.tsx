@@ -24,6 +24,18 @@ export default async function TicketHubLayout({
     showVaultLink = u?.showVaultLink ?? true
   }
 
+  const [pendingInboxCount, newTicketCount, unpaidInvoiceCount, pendingEstimateCount] =
+    await Promise.all([
+      prisma.tH_PendingInboundEmail.count({ where: { status: 'PENDING' } }),
+      prisma.tH_Ticket.count({ where: { status: 'NEW' } }),
+      prisma.tH_Invoice.count({
+        where: { status: { in: ['SENT', 'VIEWED', 'OVERDUE'] } },
+      }),
+      prisma.tH_Estimate.count({
+        where: { status: { in: ['SENT'] } },
+      }),
+    ])
+
   const timer = await getMyTimer()
   const timerBarProps = timer
     ? {
@@ -40,14 +52,25 @@ export default async function TicketHubLayout({
     <div className="flex h-screen">
       {/* Desktop sidebar — hidden below md */}
       <div className="hidden md:block">
-        <Sidebar showVaultLink={showVaultLink} />
+        <Sidebar
+          showVaultLink={showVaultLink}
+          inboxCount={pendingInboxCount}
+          ticketCount={newTicketCount}
+          invoiceCount={unpaidInvoiceCount}
+          estimateCount={pendingEstimateCount}
+        />
       </div>
       <main className="flex flex-1 flex-col overflow-hidden">
         <InstallPrompt />
         <TimerBar initial={timerBarProps} />
         <div className="flex-1 overflow-y-auto pb-20 md:pb-0">{children}</div>
       </main>
-      <MobileBottomBar />
+      <MobileBottomBar
+        inboxCount={pendingInboxCount}
+        ticketCount={newTicketCount}
+        invoiceCount={unpaidInvoiceCount}
+        estimateCount={pendingEstimateCount}
+      />
       <SyncStatusBadge />
       <LocationTracker />
     </div>

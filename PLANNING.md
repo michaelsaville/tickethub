@@ -988,94 +988,285 @@ model TH_Notification {
 
 ## 9. Feature Specification — Phase by Phase
 
-### Phase 1 — Core Ticketing Foundation
+### Phase 1 — Core Ticketing Foundation ✅
 *Goal: A working ticketing system a tech can use every day*
 
-- [ ] Client management (CRUD, contacts, sites)
-- [ ] Global System Contract auto-creation on client creation
-- [ ] Ticket CRUD with all statuses and priorities
-- [ ] Ticket detail page (three-panel desktop, tabbed mobile)
-- [ ] Ticket queue with filtering, sorting, saved views
-- [ ] Comments — public and internal notes
-- [ ] File/photo attachments on tickets
-- [ ] Ticket timeline / audit log
-- [ ] Unread ticket indicators (bold + envelope icon)
-- [ ] Client context injection on new ticket (internal notes, open tickets)
-- [ ] User management and role assignment
-- [ ] Basic dashboard (tech view: my queue, manager view: team overview)
-- [ ] SLA policy configuration and countdown timers
-- [ ] Ticket tagging
+- [x] Client management (CRUD, contacts, sites)
+- [x] Global System Contract auto-creation on client creation
+- [x] Ticket CRUD with all statuses and priorities
+- [x] Ticket detail page (three-panel desktop, tabbed mobile)
+- [x] Ticket queue with filtering, sorting, saved views
+- [x] Comments — public and internal notes
+- [x] File/photo attachments on tickets
+- [x] Ticket timeline / audit log
+- [x] Unread ticket indicators (bold + envelope icon)
+- [x] Client context injection on new ticket (internal notes, open tickets)
+- [x] User management and role assignment
+- [x] Basic dashboard (tech view: my queue, manager view: team overview)
+- [x] SLA policy configuration and countdown timers
+- [~] Ticket tagging — *schema exists (TH_TicketTag), no UI to add/remove/filter by tags*
 
-### Phase 2 — Time, Billing & Parts
+### Phase 2 — Time, Billing & Parts ✅
 *Goal: Complete the ticket → invoice → email flow*
 
-- [ ] Item catalog (labor types, parts, expenses)
-- [ ] Charge model — full lifecycle (NOT_BILLABLE → BILLABLE → INVOICED → LOCKED)
-- [ ] Quick Charge pane on every ticket
-- [ ] Ticket timer — start/stop, persists across navigation
-- [ ] Time Spent vs Time Charged as separate fields
-- [ ] Finance-blind tech logging with cascading price resolution
-- [ ] Batch Invoice Wizard (per-client, per-contract, per-ticket)
-- [ ] Invoice preview and PDF generation
-- [ ] Invoice email to client from M365
-- [ ] Invoice delivery status tracking
-- [ ] Parts tracking on tickets (manual entry)
-- [ ] Contract management (block hours, recurring, T&M)
-- [ ] Block hours balance tracking
-- [ ] To-do → Charge conversion
+- [x] Item catalog (labor types, parts, expenses)
+- [x] Charge model — full lifecycle (NOT_BILLABLE → BILLABLE → INVOICED → LOCKED)
+- [x] Quick Charge pane on every ticket
+- [x] Ticket timer — start/stop, persists across navigation (TimerBar + TimerControls)
+- [x] Time Spent vs Time Charged as separate fields
+- [x] Finance-blind tech logging with cascading price resolution (4-level waterfall in billing.ts)
+- [x] Batch Invoice Wizard (per-client, per-contract, per-ticket)
+- [x] Invoice preview and PDF generation (@react-pdf/renderer)
+- [x] Invoice email to client from M365 (Graph API + PDF attachment)
+- [x] Invoice delivery status tracking (sent/viewed/paid + pixel tracking)
+- [x] Parts tracking on tickets (manual entry + part→charge conversion)
+- [x] Contract management (block hours, recurring, T&M)
+- [x] Block hours balance tracking (auto-incremented on charge creation)
+- [x] To-do → Charge conversion (checklist items → LABOR charges)
 
-### Phase 3 — Mobile & Offline
+### Phase 3 — Mobile & Offline ✅
 *Goal: Field techs can work completely offline*
 
-- [ ] PWA manifest and service worker (next-pwa)
-- [ ] Offline queue with Dexie.js IndexedDB
-- [ ] Background sync — flush queue on reconnect
-- [ ] Optimistic UI for all field operations
-- [ ] Sync status indicator (persistent)
-- [ ] Mobile bottom tab navigation
-- [ ] Expandable FAB (Add Note, Log Time, Add Part, Photo, Status)
-- [ ] Swipe gestures on ticket list (advance status, quick actions)
-- [ ] Customer signature capture
-- [ ] Camera integration with GPS tagging
-- [ ] Voice-to-text in note fields
-- [ ] Push notifications (ntfy + Pushover)
-- [ ] Notification preference management per user
+- [x] PWA manifest and service worker (next-pwa + Workbox background sync)
+- [x] Offline queue with Dexie.js IndexedDB (3 tables: syncQueue, tickets, locallyStoppedTimers)
+- [x] Background sync — flush queue on reconnect (exponential backoff, idempotency via clientOpId)
+- [x] Optimistic UI for all field operations (pending comments store, sync-op-completed events)
+- [x] Sync status indicator (persistent) (SyncStatusBadge.tsx, fixed bottom-right)
+- [x] Mobile bottom tab navigation (MobileBottomBar.tsx, 5-tab)
+- [~] Expandable FAB — *implemented as global nav (new ticket/client/invoice/search), not ticket-scoped actions (note/time/part/photo/status)*
+- [x] Swipe gestures on ticket list (right=resolve, left=waiting customer)
+- [x] Customer signature capture (canvas + GPS tagging)
+- [~] Camera integration with GPS tagging — *camera capture works on mobile, GPS tagging only on signatures not photo attachments*
+- [x] Voice-to-text in note fields (Web Speech API via useVoiceInput hook)
+- [x] Push notifications (ntfy + Pushover) (mode-aware: ON_CALL/WORKING/OFF_DUTY)
+- [x] Notification preference management per user (mode, ntfyTopic, pushoverToken)
 
-### Phase 4 — AI & Smart Features
+### Phase 4 — AI & Smart Features ✅
 *Goal: AI that actually works reliably on narrow use cases*
 
-- [ ] Fuel receipt scanner (Claude vision API)
-- [ ] AI ticket classification (47 categories, auto-routing)
-- [ ] Natural language ticket search (Smart Ticket Search)
-- [ ] AI suggested resolution steps from ticket history
-- [ ] AI-assisted report builder (natural language → query)
-- [ ] Ticket → Knowledge Base one-click conversion
-- [ ] AI-powered "thank you" detection on closed tickets
+- [x] Fuel receipt scanner (Claude vision API) (extracts vendor, date, line items, totals)
+- [x] AI ticket classification (auto-routing with priority/type/category/assignee suggestion)
+- [x] Natural language ticket search (Smart Ticket Search) (NL → Prisma filters)
+- [x] AI suggested resolution steps from ticket history (similar resolved ticket lookup)
+- [x] AI-assisted report builder (natural language → query) (tickets or summary groupBy)
+- [ ] Ticket → Knowledge Base one-click conversion — *not implemented, no TH_KBArticle model in schema*
+- [x] AI-powered "thank you" detection on closed tickets (pattern shortcircuit + Claude fallback)
 
 ### Phase 5 — Integrations & Extensions
 *Goal: TicketHub connects to the rest of the MSP stack*
 
-- [ ] Browser Extension — Amazon Business parts scraper
-- [ ] Browser Extension — Invoice/receipt capture from email
-- [ ] QuickBooks integration (invoice sync, chart of accounts)
-- [ ] Xero integration (alternative to QuickBooks)
-- [ ] Microsoft 365 email → ticket creation (webhook)
-- [ ] NinjaOne RMM → ticket creation (alert-based)
-- [ ] Toggl per-user sync (optional, per-user API token)
-- [ ] Todoist task creation from tickets (optional, per-user)
-- [ ] SyncroMSP asset sync (existing DocHub integration pattern)
+- [ ] Browser Extension — Amazon Business parts scraper — *not started, no extension-parts/ directory*
+- [ ] Browser Extension — Invoice/receipt capture from email — *not started, no extension-invoice/ directory*
+- [x] QuickBooks integration (invoice sync, chart of accounts) (OAuth flow + invoice push)
+- [ ] Xero integration (alternative to QuickBooks) — *not started*
+- [x] Microsoft 365 email → ticket creation (webhook) (Graph subscriptions + auto-renewal cron)
+- [x] ConnectWise RMM → ticket creation (webhook + secret validation + severity→priority mapping)
+- [ ] NinjaOne RMM → ticket creation (alert-based) — *not started*
+- [ ] Toggl per-user sync (optional, per-user API token) — *not started*
+- [ ] Todoist task creation from tickets (optional, per-user) — *not started*
+- [~] SyncroMSP asset sync — *estimate polling + migration tool exist, not real-time asset sync*
+- [x] Amazon PA-API product lookup (search + ASIN lookup with caching)
 
-### Phase 6 — Reporting & Analytics
+### Phase 6 — Reporting & Analytics ✅
 *Goal: Data-driven MSP operations*
 
-- [ ] Tech performance dashboard (tickets closed, resolution time, utilization)
-- [ ] SLA compliance reports
-- [ ] Profitability by client / contract / tech
-- [ ] Ticket volume trends (inflow vs resolution)
-- [ ] Time to first response tracking
-- [ ] Client-facing monthly reports (QBR-ready)
-- [ ] Custom report builder
-- [ ] Export to CSV
+- [x] Tech performance dashboard (tickets closed, resolution time, utilization + CSV)
+- [x] SLA compliance reports (met/breached/at-risk by priority and client + CSV)
+- [x] Profitability by client / contract / tech (revenue, labor cost, parts cost, margin + CSV)
+- [x] Ticket volume trends (inflow vs resolution) (weekly/monthly granularity + CSV)
+- [x] Time to first response tracking (embedded in volume trends report)
+- [ ] Client-facing monthly reports (QBR-ready) — *not started, all reports are internal-only*
+- [x] Custom report builder (AI-powered natural language → Prisma queries)
+- [x] Export to CSV (all standard reports have CSV export buttons)
+
+### Phase 7 — Dispatch Board & Scheduling
+*Goal: A visual dispatch board that turns unscheduled tickets into scheduled, billable appointments*
+
+**Design rationale:** Researched HaloPSA, RangerMSP, and Kaseya/Autotask PSA dispatch modules. All three converge on a split-pane layout (unscheduled ticket queue + tech timeline grid) with drag-and-drop as the core interaction. RangerMSP's key architectural insight applies here: **appointments are scheduling artifacts, Charges are billing artifacts** — keep them decoupled but convertible. TicketHub already has the Charge backbone; the scheduler creates appointments that can spawn Charges on completion.
+
+#### 7.1 — Dispatch Board Layout
+
+```
+┌─────────────────────────────────────────────────────────────────────────┐
+│  [◀ Prev Week]  Apr 14 – Apr 20, 2026  [Next Week ▶]   [Today]       │
+│                                                                         │
+│  ┌──────────────┐  ┌────────────────────────────────────────────────┐  │
+│  │ UNSCHEDULED  │  │  Mon 4/14    │  Tue 4/15    │  Wed 4/16  ...  │  │
+│  │ TICKETS      │  │ Mike │ Josh  │ Mike │ Josh  │ Mike │ Josh     │  │
+│  │              │  ├──────┼───────┼──────┼───────┼──────┼──────    │  │
+│  │ ┌──────────┐ │  │ 8:00 │       │      │       │      │         │  │
+│  │ │ #1042    │ │  │ 8:15 │       │      │       │      │         │  │
+│  │ │ Printer  │ │  │ 8:30 ████   │      │       │      │         │  │
+│  │ │ ⚡ HIGH  │ │  │ 8:45 ████   │      │ ████  │      │         │  │
+│  │ │ ACME Co  │ │  │ 9:00 ████   │      │ ████  │      │         │  │
+│  │ │ ~45 min  │ │  │ 9:15 ████   │      │ ████  │      │         │  │
+│  │ └──────────┘ │  │ 9:30 │       │      │ ████  │      │         │  │
+│  │ ┌──────────┐ │  │ 9:45 │       │      │       │      │         │  │
+│  │ │ #1038    │ │  │10:00 │       │ ████ │       │      │         │  │
+│  │ │ Network  │ │  │ ...  │       │ ████ │       │      │         │  │
+│  │ │ 🔴 URGENT│ │  │      │       │      │       │      │         │  │
+│  │ │ City Gov │ │  │      │       │      │       │      │         │  │
+│  │ │ ~2 hrs   │ │  │      │       │      │       │      │         │  │
+│  │ └──────────┘ │  │      │       │      │       │      │         │  │
+│  │              │  │      │       │      │       │      │         │  │
+│  │  ... more    │  │      │       │      │       │      │         │  │
+│  └──────────────┘  └────────────────────────────────────────────────┘  │
+└─────────────────────────────────────────────────────────────────────────┘
+```
+
+- [ ] Split-pane layout: unscheduled ticket queue (left 280px) + tech calendar grid (right, scrollable)
+- [ ] **Week navigation**: prev/next week buttons + "Today" jump. 7-day work week (Mon–Sun) always visible
+- [ ] **1 column per tech per day**: small MSP = 2–5 techs. Each day section has N sub-columns. Horizontal scroll for overflow
+- [ ] **15-minute row increments**: rows from business hours start (default 7:00 AM) to end (default 6:00 PM). Configurable in Settings
+- [ ] **Drag-and-drop**: drag ticket card from queue → drop on tech column at desired time slot. Creates appointment + assigns tech in one action
+- [ ] **Resize appointments**: drag bottom edge of appointment block to change duration (snaps to 15-min)
+- [ ] **Move appointments**: drag existing appointment to different time/tech/day to reschedule
+- [ ] **Day focus view**: click a day header to expand that day full-width (easier for heavy dispatch days)
+
+#### 7.2 — Unscheduled Ticket Queue (Left Panel)
+
+- [ ] Shows all tickets with status NEW, OPEN, or IN_PROGRESS that have no future appointments
+- [ ] Each card shows: ticket number, title (truncated), priority badge, client name, estimated duration (from `estimatedMinutes`)
+- [ ] Sortable by: priority (default), SLA due, created date, client
+- [ ] Filterable by: client, priority, type, board
+- [ ] Search box for quick ticket lookup
+- [ ] Ticket count badge at panel header
+- [ ] Cards are **draggable** — cursor changes on hover, ghost preview while dragging
+
+#### 7.3 — Appointment Blocks (Calendar Grid)
+
+- [ ] Color-coded by ticket priority (same palette as ticket list: red/orange/blue/gray)
+- [ ] Shows: ticket number, client short code, title (truncated to fit block height)
+- [ ] Status indicator on block: 🔵 SCHEDULED → 🚗 EN_ROUTE → 🟢 ON_SITE → ✅ COMPLETE → ❌ CANCELLED
+- [ ] Click appointment block → popover with: full ticket title, client, site address, notes, status controls, "Open Ticket" link
+- [ ] Right-click context menu: Reschedule, Cancel, Mark Complete, Open Ticket, Add Another Tech
+- [ ] Completed blocks become muted/semi-transparent
+- [ ] Overlapping appointments (same tech, overlapping times) shown with a red conflict indicator
+
+#### 7.4 — Multi-Tech Dispatch
+
+When multiple techs are dispatched to the same ticket:
+
+- [ ] Each tech gets their **own TH_Appointment record** linked to the same ticket (same pattern as HaloPSA/RangerMSP/Autotask)
+- [ ] "Add Another Tech" action on any appointment → creates a second appointment for the same ticket at the same time on a different tech's column
+- [ ] Visual link: appointments for the same ticket on different techs show a subtle connector line or matching accent stripe
+- [ ] On ticket detail page, all appointments are listed with per-tech status tracking
+
+#### 7.5 — Appointment → Charge Billing
+
+Following RangerMSP's pattern: appointments are scheduling artifacts, Charges are billing artifacts. They are linked but independent.
+
+- [ ] **On completion**: when an appointment is marked COMPLETE, prompt: "Log time as charge?" with pre-filled duration (actualEnd − actualStart, or scheduledEnd − scheduledStart if no actuals)
+- [ ] **Per-tech billing**: each tech's appointment creates its **own Charge** independently. Two techs on-site for 2 hours = two separate LABOR charges
+- [ ] **15-min rounding**: charged time rounds up to nearest 15-min increment (configurable: 15/30/60 min). Rounding rule stored in Settings
+- [ ] **Auto-charge option**: Settings toggle for "auto-create charge on appointment completion" (skip the prompt). Charge created as BILLABLE with resolved price from cascading waterfall
+- [ ] **Travel time**: optional travel duration field on appointment. Can generate a separate NOT_BILLABLE charge (or BILLABLE if contract allows travel billing)
+- [ ] **No-show / cancelled**: cancelled appointments don't generate charges. Dispatcher can mark CANCELLED with a reason
+
+#### 7.6 — Tech Availability & Working Hours
+
+- [ ] Per-tech working hours configured in Settings → Users (e.g., Mon–Fri 8:00–17:00)
+- [ ] Non-working hours grayed out on the dispatch grid (visible but not droppable)
+- [ ] Utilization indicator per tech per day: small bar or percentage showing booked vs available hours
+- [ ] Overbooked warning: if appointments exceed available hours, tech column header turns amber/red
+
+#### 7.7 — Appointment Status Flow
+
+```
+SCHEDULED → EN_ROUTE → ON_SITE → COMPLETE
+    ↓                               ↓
+CANCELLED                    (spawn Charge)
+```
+
+- [ ] Status transitions via: appointment popover buttons, right-click menu, or mobile swipe actions
+- [ ] EN_ROUTE and ON_SITE timestamps recorded as `actualStart` approximations
+- [ ] ON_SITE → COMPLETE records `actualEnd`
+- [ ] Status changes fire push notifications to the assigned tech (and dispatcher if configured)
+
+#### 7.8 — Schema Changes Required
+
+```prisma
+// Updated TH_Appointment model
+model TH_Appointment {
+  id              String    @id @default(cuid())
+  ticketId        String
+  ticket          TH_Ticket @relation(fields: [ticketId], references: [id])
+  technicianId    String
+  technician      TH_User   @relation(fields: [technicianId], references: [id])
+  createdById     String
+  createdBy       TH_User   @relation("CreatedAppointments", fields: [createdById], references: [id])
+
+  scheduledStart  DateTime
+  scheduledEnd    DateTime
+  actualStart     DateTime?
+  actualEnd       DateTime?
+  travelMinutes   Int?              // optional travel time
+
+  notes           String?
+  status          TH_AppointmentStatus @default(SCHEDULED)
+
+  // Link to charge created on completion
+  chargeId        String?  @unique
+  charge          TH_Charge? @relation(fields: [chargeId], references: [id])
+
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@index([technicianId, scheduledStart])
+  @@index([ticketId])
+  @@map("th_appointments")
+}
+
+enum TH_AppointmentStatus {
+  SCHEDULED
+  EN_ROUTE
+  ON_SITE
+  COMPLETE
+  CANCELLED
+}
+
+// New: per-tech working hours
+model TH_WorkingHours {
+  id            String  @id @default(cuid())
+  userId        String
+  user          TH_User @relation(fields: [userId], references: [id])
+  dayOfWeek     Int     // 0=Sun, 1=Mon, ..., 6=Sat
+  startTime     String  // "08:00" (HH:mm)
+  endTime       String  // "17:00" (HH:mm)
+  isWorkingDay  Boolean @default(true)
+
+  @@unique([userId, dayOfWeek])
+  @@map("th_working_hours")
+}
+```
+
+#### 7.9 — Mobile Dispatch View
+
+- [ ] Single-day view only on mobile (no room for week grid)
+- [ ] Vertical scroll through the day's 15-min slots
+- [ ] Swipe between techs (horizontal) or between days (tabs at top)
+- [ ] Tap empty slot → "Schedule ticket" picker (replaces drag-and-drop)
+- [ ] Appointment cards show status + tap to transition (EN_ROUTE → ON_SITE → COMPLETE)
+- [ ] "My Day" default view: shows only the logged-in tech's schedule for today
+
+#### Checklist Summary
+
+- [ ] Dispatch board page (`/schedule`)
+- [ ] Unscheduled ticket queue panel with drag-and-drop
+- [ ] Tech column grid with 15-min increments, 7-day week view
+- [ ] Week navigation (prev/next/today)
+- [ ] Day focus expand view
+- [ ] Appointment CRUD (create via drag, resize, move, cancel)
+- [ ] Multi-tech dispatch (same ticket, separate appointments)
+- [ ] Appointment status flow (SCHEDULED → EN_ROUTE → ON_SITE → COMPLETE)
+- [ ] Appointment → Charge conversion on completion (per-tech, 15-min rounding)
+- [ ] Auto-charge toggle in Settings
+- [ ] Travel time field (optional separate charge)
+- [ ] Tech working hours configuration
+- [ ] Availability/utilization indicators
+- [ ] Overbooked conflict warnings
+- [ ] Mobile single-day view with swipe navigation
+- [ ] Push notifications on status transitions
 
 ---
 
@@ -1518,6 +1709,12 @@ Don't build ten AI features that sometimes work. Build four that work perfectly 
 | 🟢 Lower | AI report builder | 4 |
 | 🟢 Lower | Community automation templates | 6 |
 | 🟢 Lower | Client-facing portal | 6 |
+| 🔴 Must-Nail | Dispatch board + drag-and-drop scheduling | 7 |
+| 🔴 Must-Nail | Multi-tech dispatch with per-tech billing | 7 |
+| 🟠 High | Appointment → Charge auto-conversion (15-min rounding) | 7 |
+| 🟠 High | Tech working hours + utilization indicators | 7 |
+| 🟡 Medium | Travel time tracking (separate charge) | 7 |
+| 🟡 Medium | Mobile single-day dispatch view | 7 |
 
 ### What We Build First
 
@@ -1561,6 +1758,10 @@ This section records every significant decision made during planning so future-u
 | AI model | Claude Sonnet (same as DocHub) | GPT-4, Gemini | Already integrated, consistent behavior |
 | Invoice amounts | Stored as cents (integers) | Floats/decimals | No floating point errors in financial calculations |
 | Soft deletes | Yes, for tickets/charges/invoices | Hard delete | Audit trail, billing history must be preserved |
+| Scheduler layout | Tech columns + 15-min rows, 7-day week | Gantt rows per tech (HaloPSA/Autotask style) | Columns match small-MSP reality (2–5 techs), week view shows full picture at a glance |
+| Appointment vs Charge | Decoupled — appointment spawns charge on completion | Auto-merge into single time entry | RangerMSP pattern: scheduling ≠ billing. Allows no-shows, cancellations, and walk-in charges without scheduling |
+| Multi-tech billing | Separate appointment + separate charge per tech | Single shared appointment | Each tech's time is independently billable with its own rounding and price resolution |
+| Time rounding | 15-min increment rounding (configurable) | Exact minutes | Industry standard for MSP billing, matches contract expectations |
 
 ---
 

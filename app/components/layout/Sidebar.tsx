@@ -41,15 +41,33 @@ const FOOTER_NAV = [
 const DOCHUB_URL =
   process.env.NEXT_PUBLIC_DOCHUB_URL || 'https://dochub.yourdomain.com'
 
-export function Sidebar({ showVaultLink = false }: { showVaultLink?: boolean }) {
+export function Sidebar({
+  showVaultLink = false,
+  inboxCount = 0,
+  ticketCount = 0,
+  invoiceCount = 0,
+  estimateCount = 0,
+}: {
+  showVaultLink?: boolean
+  inboxCount?: number
+  ticketCount?: number
+  invoiceCount?: number
+  estimateCount?: number
+}) {
   const pathname = usePathname()
+
+  const badgeCounts: Record<string, number> = {}
+  if (inboxCount > 0) badgeCounts['/inbox'] = inboxCount
+  if (ticketCount > 0) badgeCounts['/tickets'] = ticketCount
+  if (invoiceCount > 0) badgeCounts['/invoices'] = invoiceCount
+  if (estimateCount > 0) badgeCounts['/estimates'] = estimateCount
 
   return (
     <aside className="flex h-screen w-60 flex-col border-r border-th-border bg-th-surface">
       <ModuleSwitcher />
 
       <nav className="flex-1 overflow-y-auto px-2 py-4">
-        <NavGroup items={PRIMARY_NAV} pathname={pathname} />
+        <NavGroup items={PRIMARY_NAV} pathname={pathname} badges={badgeCounts} />
 
         <div className="mt-6 px-3 text-[10px] font-mono uppercase tracking-wider text-th-text-muted">
           My Views
@@ -112,18 +130,27 @@ function ModuleSwitcher() {
   )
 }
 
+/** Routes where the badge should be red (money / action-required). */
+const RED_BADGE_ROUTES = new Set(['/invoices', '/estimates', '/inbox'])
+
 function NavGroup({
   items,
   pathname,
+  badges = {},
 }: {
   items: ReadonlyArray<{ href: string; label: string; icon: string }>
   pathname: string
+  badges?: Record<string, number>
 }) {
   return (
     <ul className="space-y-0.5">
       {items.map((item) => {
         const active =
           pathname === item.href || pathname.startsWith(`${item.href}/`)
+        const count = badges[item.href]
+        const badgeBg = RED_BADGE_ROUTES.has(item.href)
+          ? 'bg-red-500'
+          : 'bg-amber-500'
         return (
           <li key={item.href}>
             <Link
@@ -138,6 +165,11 @@ function NavGroup({
                 {item.icon}
               </span>
               <span>{item.label}</span>
+              {count != null && count > 0 && (
+                <span className={`ml-auto flex h-5 min-w-5 items-center justify-center rounded-full ${badgeBg} px-1.5 text-[10px] font-bold leading-none text-white`}>
+                  {count > 99 ? '99+' : count}
+                </span>
+              )}
             </Link>
           </li>
         )

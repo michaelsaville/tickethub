@@ -1,16 +1,19 @@
 import { NextResponse, type NextRequest } from 'next/server'
-import { graphFetch } from '@/app/lib/m365'
+import { graphFetch, senderUpn } from '@/app/lib/m365'
 import {
   processInboundEmail,
   type ParsedInboundEmail,
 } from '@/app/lib/inbox-core'
-import { subscriptionClientState } from '@/app/lib/m365-subscribe'
+import {
+  subscriptionClientState,
+  mailboxForSubscription,
+} from '@/app/lib/m365-subscribe'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
 
 /**
- * Microsoft Graph change-notification webhook for the accounting mailbox.
+ * Microsoft Graph change-notification webhook for monitored mailboxes.
  *
  * Two modes:
  *
@@ -23,10 +26,24 @@ export const dynamic = 'force-dynamic'
  *    more notification records:
  *      { value: [{ resource, resourceData: { id }, clientState }, ...] }
  *    For each record we verify the clientState matches our shared
- *    secret, then fetch the full message via Graph and run it through
- *    processInboundEmail. We ACK with 202 immediately — heavy work
- *    happens synchronously but must complete within 30s per Graph docs.
+ *    secret, extract which mailbox the notification is for from the
+ *    `resource` field, then fetch the full message via Graph and run
+ *    it through processInboundEmail. We ACK with 202 immediately —
+ *    heavy work happens synchronously but must complete within 30s
+ *    per Graph docs.
  */
+
+/**
+ * Extract the mailbox UPN from a Graph notification resource string.
+ * Resource looks like: `users/helpdesk@pcc2k.com/mailFolders('Inbox')/messages/{id}`
+ */
+function parseMailboxFromResource(resource: string | undefined): string {
+  if (!resource) return senderUpn()
+  const match = resource.match(/^\/?users\/([^/]+)\//)
+  if (!match) return senderUpn()
+  return decodeURIComponent(match[1])
+}
+
 export async function POST(req: NextRequest) {
   const url = new URL(req.url)
   const validationToken = url.searchParams.get('validationToken')
@@ -39,6 +56,7 @@ export async function POST(req: NextRequest) {
 
   let payload: {
     value?: Array<{
+      subscriptionId?: string
       resource?: string
       resourceData?: { id?: string }
       clientState?: string
@@ -75,8 +93,17 @@ export async function POST(req: NextRequest) {
     const messageId = record.resourceData?.id
     if (!messageId) continue
 
+    // Graph notifications use a user GUID in the resource field, not the
+    // UPN we subscribed with. Look up the mailbox via subscriptionId instead.
+    const mailbox =
+      (record.subscriptionId
+        ? await mailboxForSubscription(record.subscriptionId)
+        : null) ??
+      parseMailboxFromResource(record.resource)
+    console.log('[m365/email webhook] mailbox=%s messageId=%s', mailbox, messageId)
+
     try {
-      const parsed = await fetchAndParseMessage(messageId)
+      const parsed = await fetchAndParseMessage(messageId, mailbox)
       if (!parsed) continue
       const outcome = await processInboundEmail(parsed)
       console.log('[m365/email webhook]', outcome)
@@ -100,6 +127,7 @@ export async function POST(req: NextRequest) {
  */
 async function fetchAndParseMessage(
   messageId: string,
+  mailbox: string,
 ): Promise<ParsedInboundEmail | null> {
   // $select keeps the response small; $expand isn't needed.
   const fields = [
@@ -113,7 +141,7 @@ async function fetchAndParseMessage(
     'internetMessageId',
   ].join(',')
   const res = await graphFetch(
-    `/users/${encodeURIComponent(process.env.M365_SENDER_UPN ?? '')}/messages/${encodeURIComponent(messageId)}?$select=${fields}`,
+    `/users/${encodeURIComponent(mailbox)}/messages/${encodeURIComponent(messageId)}?$select=${fields}`,
   )
   if (!res.ok) {
     console.error(
@@ -168,6 +196,7 @@ async function fetchAndParseMessage(
     receivedAt: msg.receivedDateTime
       ? new Date(msg.receivedDateTime)
       : new Date(),
+    mailbox,
     inReplyTo,
     references,
     headers,

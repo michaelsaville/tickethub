@@ -1,5 +1,5 @@
 import { NextResponse, type NextRequest } from 'next/server'
-import { ensureInboxSubscription } from '@/app/lib/m365-subscribe'
+import { ensureInboxSubscriptions } from '@/app/lib/m365-subscribe'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
@@ -22,8 +22,8 @@ export async function GET(req: NextRequest) {
   }
 
   try {
-    const result = await ensureInboxSubscription()
-    return NextResponse.json({ data: result, error: null })
+    const results = await ensureInboxSubscriptions()
+    return NextResponse.json({ data: results, error: null })
   } catch (e) {
     console.error('[cron/m365-subscription-renew] failed', e)
     return NextResponse.json(

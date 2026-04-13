@@ -43,6 +43,23 @@ export function senderUpn(): string {
   return process.env.M365_SENDER_UPN ?? ''
 }
 
+/**
+ * Mailboxes to monitor for inbound email. Parsed from the
+ * comma-separated M365_INBOUND_MAILBOXES env var, falling back to
+ * the single M365_SENDER_UPN for backwards compatibility.
+ */
+export function inboundMailboxes(): string[] {
+  const raw = process.env.M365_INBOUND_MAILBOXES
+  if (raw) {
+    return raw
+      .split(',')
+      .map((s) => s.trim().toLowerCase())
+      .filter(Boolean)
+  }
+  const upn = senderUpn()
+  return upn ? [upn] : []
+}
+
 export async function getAppOnlyToken(): Promise<string> {
   if (cachedToken && cachedToken.expiresAt > Date.now() + 60_000) {
     return cachedToken.accessToken

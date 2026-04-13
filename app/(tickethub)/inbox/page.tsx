@@ -79,6 +79,7 @@ export default async function InboxPage({
     forwardedByUserId: r.forwardedByUserId,
     status: r.status,
     matchedTicketId: r.matchedTicketId,
+    mailbox: r.mailbox ?? null,
   }))
 
   return (

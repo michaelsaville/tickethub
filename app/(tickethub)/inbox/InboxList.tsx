@@ -22,6 +22,7 @@ export interface InboxRow {
   forwardedByUserId: string | null
   status: string
   matchedTicketId: string | null
+  mailbox: string | null
 }
 
 interface Props {
@@ -100,12 +101,20 @@ function InboxRowCard({
   const isForwarded = Boolean(row.forwardedBy)
   const isDismissed = row.status === 'DISMISSED'
   const isApproved = row.status === 'APPROVED'
+  const mailboxLabel = row.mailbox
+    ? row.mailbox.split('@')[0] ?? row.mailbox
+    : null
 
   return (
     <div className="th-card">
       <div className="flex items-start justify-between gap-4">
         <div className="min-w-0 flex-1">
           <div className="mb-1 flex flex-wrap items-center gap-2">
+            {mailboxLabel && (
+              <span className="rounded-full border border-sky-500/40 bg-sky-500/10 px-2 py-0.5 font-mono text-[10px] uppercase tracking-wider text-sky-300">
+                {mailboxLabel}
+              </span>
+            )}
             {isForwarded && (
               <span className="rounded-full border border-accent/40 bg-accent/10 px-2 py-0.5 font-mono text-[10px] uppercase tracking-wider text-accent">
                 ↪ {row.forwardedBy}

@@ -245,6 +245,7 @@ model TH_Charge {
 
   fuelReceipt TH_FuelReceipt?
   ticketPart  TH_TicketPart?
+  appointment TH_Appointment?
 
   @@map("th_charges")
   @@schema("tickethub")
@@ -606,25 +607,58 @@ model TH_FuelReceipt {
 
 // ─── SCHEDULING ───────────────────────────────────────────────────────────
 
+enum TH_AppointmentStatus {
+  SCHEDULED
+  EN_ROUTE
+  ON_SITE
+  COMPLETE
+  CANCELLED
+
+  @@schema("tickethub")
+}
+
 model TH_Appointment {
-  id           String    @id @default(cuid())
-  ticketId     String
-  ticket       TH_Ticket @relation(fields: [ticketId], references: [id])
-  technicianId String
-  technician   TH_User   @relation(fields: [technicianId], references: [id])
+  id             String    @id @default(cuid())
+  ticketId       String
+  ticket         TH_Ticket @relation(fields: [ticketId], references: [id])
+  technicianId   String
+  technician     TH_User   @relation("TechAppointments", fields: [technicianId], references: [id])
+  createdById    String
+  createdBy      TH_User   @relation("CreatedAppointments", fields: [createdById], references: [id])
 
   scheduledStart DateTime
   scheduledEnd   DateTime
   actualStart    DateTime?
   actualEnd      DateTime?
+  travelMinutes  Int?
 
   notes  String?
-  status String  @default("SCHEDULED")
+  status TH_AppointmentStatus @default(SCHEDULED)
+
+  // Link to charge created on completion
+  chargeId String?     @unique
+  charge   TH_Charge?  @relation(fields: [chargeId], references: [id])
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
+  @@index([technicianId, scheduledStart])
+  @@index([ticketId])
   @@map("th_appointments")
+  @@schema("tickethub")
+}
+
+model TH_WorkingHours {
+  id           String  @id @default(cuid())
+  userId       String
+  user         TH_User @relation(fields: [userId], references: [id])
+  dayOfWeek    Int     // 0=Sun, 1=Mon, ..., 6=Sat
+  startTime    String  // "08:00" (HH:mm)
+  endTime      String  // "17:00" (HH:mm)
+  isWorkingDay Boolean @default(true)
+
+  @@unique([userId, dayOfWeek])
+  @@map("th_working_hours")
   @@schema("tickethub")
 }
 
@@ -662,7 +696,9 @@ model TH_User {
   createdTickets  TH_Ticket[]        @relation("CreatedTickets")
   charges         TH_Charge[]
   comments        TH_TicketComment[]
-  appointments    TH_Appointment[]
+  appointments        TH_Appointment[]   @relation("TechAppointments")
+  createdAppointments TH_Appointment[]   @relation("CreatedAppointments")
+  workingHours        TH_WorkingHours[]
   fuelReceipts    TH_FuelReceipt[]
   ticketEvents    TH_TicketEvent[]
   parts           TH_TicketPart[]
@@ -698,6 +734,8 @@ model TH_PendingInboundEmail {
   bodyHtml         String?
   snippet          String
   receivedAt       DateTime
+  /// Which monitored mailbox received this email (e.g. accounting@pcc2k.com).
+  mailbox          String?
   status           TH_PendingInboundEmailStatus @default(PENDING)
   /// If this email is a "forwarded by a tech" candidate, the user
   /// who forwarded it. The dashboard shows a badge and the

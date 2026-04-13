@@ -28,6 +28,8 @@ export interface ParsedInboundEmail {
   bodyText: string
   bodyHtml: string | null
   receivedAt: Date
+  /** Which monitored mailbox received this email. */
+  mailbox?: string
   /** RFC 2822 In-Reply-To header, if present. */
   inReplyTo: string | null
   /** RFC 2822 References header list, if present. */
@@ -292,6 +294,7 @@ export async function processInboundEmail(
         bodyHtml: email.bodyHtml,
         snippet,
         receivedAt: email.receivedAt,
+        mailbox: email.mailbox ?? null,
         forwardedByUserId: forwarderUserId,
       },
       select: { id: true },
@@ -469,6 +472,7 @@ export async function processInboundEmail(
             bodyHtml: email.bodyHtml,
             snippet,
             receivedAt: email.receivedAt,
+            mailbox: email.mailbox ?? null,
             status: 'APPROVED',
             matchedTicketId: res.ticketId,
             handledAt: new Date(),
@@ -495,6 +499,7 @@ export async function processInboundEmail(
       bodyHtml: email.bodyHtml,
       snippet,
       receivedAt: email.receivedAt,
+      mailbox: email.mailbox ?? null,
     },
     select: { id: true },
   })

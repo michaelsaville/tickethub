@@ -39,6 +39,11 @@ const GROUPS = [
         description: 'ntfy topic, Pushover key, on-call mode',
       },
       {
+        href: '/settings/working-hours',
+        title: 'Working Hours',
+        description: 'Per-tech schedules for the dispatch board',
+      },
+      {
         href: '/settings/vault',
         title: 'Password Vault Shortcut',
         description: 'Show or hide the DocHub vault link in the sidebar',

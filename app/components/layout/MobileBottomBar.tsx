@@ -28,10 +28,26 @@ const FAB_ACTIONS: FabAction[] = [
   { href: '/tickets/new', label: 'New ticket', icon: '🎫' },
   { href: '/clients/new', label: 'New client', icon: '👥' },
   { href: '/invoices/new', label: 'New invoice', icon: '🧾' },
+  { href: '/schedule', label: 'Schedule', icon: '📅' },
   { href: '/tickets?q=', label: 'Search tickets', icon: '🔎' },
 ]
 
-export function MobileBottomBar() {
+const RED_BADGE_ROUTES = new Set(['/invoices', '/estimates', '/inbox'])
+
+export function MobileBottomBar({
+  inboxCount = 0,
+  ticketCount = 0,
+  invoiceCount = 0,
+  estimateCount = 0,
+}: {
+  inboxCount?: number
+  ticketCount?: number
+  invoiceCount?: number
+  estimateCount?: number
+}) {
+  const mobileBadges: Record<string, number> = {}
+  if (inboxCount > 0) mobileBadges['/inbox'] = inboxCount
+  if (ticketCount > 0) mobileBadges['/tickets'] = ticketCount
   const pathname = usePathname()
   const [open, setOpen] = useState(false)
 
@@ -118,13 +134,18 @@ export function MobileBottomBar() {
               href={tab.href}
               className={
                 active
-                  ? 'flex flex-1 flex-col items-center justify-center gap-0.5 py-2 text-[10px] text-accent'
-                  : 'flex flex-1 flex-col items-center justify-center gap-0.5 py-2 text-[10px] text-th-text-muted hover:text-slate-200'
+                  ? 'relative flex flex-1 flex-col items-center justify-center gap-0.5 py-2 text-[10px] text-accent'
+                  : 'relative flex flex-1 flex-col items-center justify-center gap-0.5 py-2 text-[10px] text-th-text-muted hover:text-slate-200'
               }
             >
               <span className="text-lg leading-none" aria-hidden>
                 {tab.icon}
               </span>
+              {mobileBadges[tab.href] != null && mobileBadges[tab.href] > 0 && (
+                <span className={`absolute top-1 left-1/2 ml-1.5 flex h-4 min-w-4 items-center justify-center rounded-full ${RED_BADGE_ROUTES.has(tab.href) ? 'bg-red-500' : 'bg-amber-500'} px-1 text-[9px] font-bold leading-none text-white`}>
+                  {mobileBadges[tab.href] > 99 ? '99+' : mobileBadges[tab.href]}
+                </span>
+              )}
               <span>{tab.label}</span>
             </Link>
           )
