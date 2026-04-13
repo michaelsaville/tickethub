@@ -58,6 +58,12 @@ export default async function ReportsPage() {
               title: 'Field Activity',
               desc: 'Daily stopping points, site visits, and missed tickets',
             },
+            {
+              href: '/reports/client-qbr',
+              icon: '📄',
+              title: 'Client Report (QBR)',
+              desc: 'Client-facing monthly/quarterly service reports with PDF export',
+            },
           ].map((r) => (
             <a
               key={r.href}

@@ -1075,7 +1075,7 @@ model TH_Notification {
 - [x] Profitability by client / contract / tech (revenue, labor cost, parts cost, margin + CSV)
 - [x] Ticket volume trends (inflow vs resolution) (weekly/monthly granularity + CSV)
 - [x] Time to first response tracking (embedded in volume trends report)
-- [ ] Client-facing monthly reports (QBR-ready) — *not started, all reports are internal-only*
+- [x] Client-facing monthly reports (QBR-ready) (client picker + date range + summary cards + PDF export)
 - [x] Custom report builder (AI-powered natural language → Prisma queries)
 - [x] Export to CSV (all standard reports have CSV export buttons)
 
