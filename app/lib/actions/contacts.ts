@@ -51,7 +51,7 @@ export async function createContact(
       })
     })
 
-    // Cross-sync: create matching ClientUser in DocHub (public schema)
+    // Cross-sync: create matching Person in DocHub (public schema)
     try {
       const thClient = await prisma.tH_Client.findUnique({
         where: { id: clientId },
@@ -59,24 +59,22 @@ export async function createContact(
       })
       if (thClient) {
         const fullName = `${firstName} ${lastName}`.trim()
-        // Find DocHub client by name
         const dhClients: { id: string }[] = await prisma.$queryRawUnsafe(
           `SELECT id FROM public."Client" WHERE name ILIKE $1 LIMIT 1`,
           thClient.name,
         )
         if (dhClients.length > 0) {
-          // Check for existing user by email match
           const existing: { id: string }[] = email
             ? await prisma.$queryRawUnsafe(
-                `SELECT id FROM public."ClientUser" WHERE "clientId" = $1 AND email ILIKE $2 LIMIT 1`,
+                `SELECT id FROM public."Person" WHERE "clientId" = $1 AND email ILIKE $2 LIMIT 1`,
                 dhClients[0].id, email,
               )
             : []
           if (existing.length === 0) {
             const cuid = `c${Date.now().toString(36)}${Math.random().toString(36).slice(2, 8)}`
             await prisma.$executeRawUnsafe(
-              `INSERT INTO public."ClientUser" (id, "clientId", name, email, phone, "jobTitle", "isActive", "createdAt", "updatedAt")
-               VALUES ($1, $2, $3, $4, $5, $6, true, NOW(), NOW())`,
+              `INSERT INTO public."Person" (id, "clientId", name, email, phone, "jobTitle", "isActive", "isPrimary", "isBilling", "isEscalation", "createdAt", "updatedAt")
+               VALUES ($1, $2, $3, $4, $5, $6, true, false, false, false, NOW(), NOW())`,
               cuid, dhClients[0].id, fullName, email, phone, jobTitle,
             )
           }

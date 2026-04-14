@@ -54,11 +54,11 @@ export async function GET(req: NextRequest) {
          a.serial,
          a."ipAddress",
          l.name AS "locationName",
-         cu.name AS "primaryUserName"
+         p.name AS "primaryUserName"
        FROM public."Asset" a
        JOIN public."Location" l ON l.id = a."locationId"
        JOIN public."Client" c ON c.id = l."clientId"
-       LEFT JOIN public."ClientUser" cu ON cu.id = a."primaryUserId"
+       LEFT JOIN public."Person" p ON p.id = a."personId"
        WHERE c.name ILIKE $1
          AND a.status != 'RETIRED'
          ${searchClause}
