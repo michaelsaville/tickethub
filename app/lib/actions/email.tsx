@@ -7,6 +7,7 @@ import { prisma } from '@/app/lib/prisma'
 import { authOptions } from '@/app/lib/auth'
 import { hasMinRole } from '@/app/lib/api-auth'
 import { m365Configured, senderUpn, sendMail } from '@/app/lib/m365'
+import { ensurePaymentLinkForInvoice } from '@/app/lib/stripe'
 import { InvoicePdf, type InvoicePdfData } from '@/app/lib/pdf/InvoicePdf'
 import { ORG } from '@/app/lib/org'
 import { formatCents } from '@/app/lib/billing'
@@ -90,6 +91,19 @@ export async function sendInvoiceEmail(
       ? `Due ${invoice.dueDate.toLocaleDateString()}.`
       : ''
     const trackingUrl = `${process.env.NEXTAUTH_URL ?? 'https://tickethub.pcc2k.com'}/api/invoices/${invoiceId}/viewed`
+
+    // Sticky Stripe Payment Link — created once, stored on the invoice,
+    // reused on every re-send. Stays valid until the invoice gets paid
+    // or voided. null when Stripe isn't configured; the email falls
+    // back to "reply to pay" in that case.
+    const payUrl = await ensurePaymentLinkForInvoice(invoiceId)
+    const payButton = payUrl
+      ? `<p style="margin:16px 0">
+          <a href="${payUrl}" style="display:inline-block;background:#F97316;color:#fff;padding:12px 20px;border-radius:8px;text-decoration:none;font-weight:600">Pay online — ${formatCents(invoice.totalAmount)}</a>
+        </p>
+        <p style="color:#888;font-size:12px;margin:-4px 0 12px">Card or ACH. This link stays valid until the invoice is paid.</p>`
+      : ''
+
     const html = `
 <!doctype html>
 <html>
@@ -101,6 +115,7 @@ export async function sendInvoiceEmail(
       Total due: <strong>${formatCents(invoice.totalAmount)}</strong>.
       ${dueLine}
     </p>
+    ${payButton}
     ${overrides.note ? `<p>${escapeHtml(overrides.note).replace(/\n/g, '<br>')}</p>` : ''}
     <p>Questions? Reply to this email or call ${escapeHtml(ORG.phone)}.</p>
     <p style="color: #888; margin-top: 24px; font-size: 12px;">

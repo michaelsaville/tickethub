@@ -39,6 +39,7 @@ export async function POST(req: Request) {
       totalAmount: true,
       sentAt: true,
       paidAt: true,
+      stripePaymentLinkUrl: true,
     },
     orderBy: [{ issueDate: "desc" }],
     take: 50,

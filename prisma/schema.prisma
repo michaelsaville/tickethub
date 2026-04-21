@@ -492,6 +492,15 @@ model TH_Invoice {
   firstViewedAt DateTime?
   viewCount     Int       @default(0)
 
+  // Stripe Payment Link for client-facing pay flow. Sticky — one URL
+  // per invoice, lives in the invoice email, stays valid until the
+  // invoice is marked PAID. stripePaymentIntentId is populated when
+  // Stripe's checkout.session.completed webhook fires and lets us
+  // cross-reference the ledger side later.
+  stripePaymentLinkId     String?
+  stripePaymentLinkUrl    String?
+  stripePaymentIntentId   String?
+
   deletedAt DateTime?
   createdAt DateTime  @default(now())
   updatedAt DateTime  @updatedAt
