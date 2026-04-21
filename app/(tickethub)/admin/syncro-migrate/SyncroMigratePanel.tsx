@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useState } from 'react'
 
-type Scope = 'customers' | 'contacts' | 'sites' | 'tickets' | 'all'
+type Scope = 'customers' | 'contacts' | 'sites' | 'tickets' | 'estimates' | 'invoices' | 'all'
 
 interface MigrationResult {
   imported: number
@@ -15,6 +15,8 @@ interface Stats {
   contacts: number
   sites: number
   tickets: number
+  estimates: number
+  invoices: number
 }
 
 export function SyncroMigratePanel() {
@@ -61,7 +63,7 @@ export function SyncroMigratePanel() {
 
       // Extract results from response
       const newResults: Record<string, MigrationResult> = {}
-      for (const key of ['customers', 'contacts', 'sites', 'tickets']) {
+      for (const key of ['customers', 'contacts', 'sites', 'tickets', 'estimates', 'invoices']) {
         if (data[key]) newResults[key] = data[key]
       }
       setResults(newResults)
@@ -80,6 +82,8 @@ export function SyncroMigratePanel() {
     { scope: 'contacts', label: 'Import Contacts' },
     { scope: 'sites', label: 'Import Sites' },
     { scope: 'tickets', label: 'Import Tickets' },
+    { scope: 'estimates', label: 'Import Estimates' },
+    { scope: 'invoices', label: 'Import Invoices' },
     { scope: 'all', label: 'Import All' },
   ]
 
@@ -108,11 +112,13 @@ export function SyncroMigratePanel() {
           Migration Status
         </h2>
         {stats ? (
-          <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
+          <div className="grid grid-cols-2 gap-4 sm:grid-cols-3">
             <StatBox label="Clients" value={stats.clients} />
             <StatBox label="Contacts" value={stats.contacts} />
             <StatBox label="Sites" value={stats.sites} />
             <StatBox label="Tickets" value={stats.tickets} />
+            <StatBox label="Estimates" value={stats.estimates} />
+            <StatBox label="Invoices" value={stats.invoices} />
           </div>
         ) : (
           <p className="text-sm text-th-text-secondary">Loading stats...</p>
