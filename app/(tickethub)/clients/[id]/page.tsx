@@ -3,6 +3,7 @@ import { notFound, redirect } from 'next/navigation'
 import { prisma } from '@/app/lib/prisma'
 import { requireAuth, hasMinRole } from '@/app/lib/api-auth'
 import { BillingSettings } from './TaxStateSelector'
+import { startPortalImpersonationAction } from '@/app/lib/actions/portal-impersonate'
 
 export const dynamic = 'force-dynamic'
 
@@ -90,6 +91,16 @@ export default async function ClientDetailPage({
             + Invoice Client ({billableCount} billable)
           </Link>
         )}
+        <form action={startPortalImpersonationAction}>
+          <input type="hidden" name="tickethubClientId" value={client.id} />
+          <button
+            type="submit"
+            className="th-btn-secondary text-xs"
+            title="Opens the client portal as if you were this client (read-only)"
+          >
+            View as client in portal ↗
+          </button>
+        </form>
       </div>
 
       {client.internalNotes && (
