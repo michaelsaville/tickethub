@@ -45,16 +45,29 @@ export async function POST(req: Request) {
   })
   if (!ticket) return NextResponse.json({ ok: false, error: "ticket not found" }, { status: 404 })
 
-  const comments = await prisma.tH_TicketComment.findMany({
-    where: { ticketId: ticket.id, isInternal: false },
-    select: {
-      id: true,
-      body: true,
-      createdAt: true,
-      author: { select: { name: true } },
-    },
-    orderBy: { createdAt: "asc" },
-  })
+  const [comments, attachments] = await Promise.all([
+    prisma.tH_TicketComment.findMany({
+      where: { ticketId: ticket.id, isInternal: false },
+      select: {
+        id: true,
+        body: true,
+        createdAt: true,
+        author: { select: { name: true } },
+      },
+      orderBy: { createdAt: "asc" },
+    }),
+    prisma.tH_Attachment.findMany({
+      where: { ticketId: ticket.id },
+      select: {
+        id: true,
+        filename: true,
+        mimeType: true,
+        sizeBytes: true,
+        createdAt: true,
+      },
+      orderBy: { createdAt: "desc" },
+    }),
+  ])
 
-  return NextResponse.json({ ok: true, ticket, comments })
+  return NextResponse.json({ ok: true, ticket, comments, attachments })
 }
