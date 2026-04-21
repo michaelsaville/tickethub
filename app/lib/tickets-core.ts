@@ -129,15 +129,17 @@ export async function createTicketCore(
         category: 'ASSIGNED',
       })
     }
-    if (priority === 'URGENT' || priority === 'HIGH') {
-      notifyAdmins({
-        title: `${priority} ticket: #${ticket.ticketNumber}`,
-        body: `${clientLabel} — ${ticket.title}`,
-        url: ticketUrl(ticket.id),
-        priority: priority === 'URGENT' ? 'critical' : 'high',
-        category: 'NEW_HIGH',
-      })
-    }
+    const isHot = priority === 'URGENT' || priority === 'HIGH'
+    notifyAdmins({
+      title: isHot
+        ? `${priority} ticket: #${ticket.ticketNumber}`
+        : `New ticket: #${ticket.ticketNumber}`,
+      body: `${clientLabel} — ${ticket.title}`,
+      url: ticketUrl(ticket.id),
+      priority:
+        priority === 'URGENT' ? 'critical' : priority === 'HIGH' ? 'high' : 'normal',
+      category: isHot ? 'NEW_HIGH' : 'INFO',
+    })
 
     if (sendClientEmail) {
       void sendTicketClientEmail({

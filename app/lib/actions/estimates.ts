@@ -85,9 +85,47 @@ export async function sendEstimateEmail(estimate: EstimateWithRelations) {
     </div>
   `
 
-  await sendMail({
-    to: [recipientEmail],
-    subject: `Estimate #${estimate.estimateNumber}: ${estimate.title} — ${formatCents(estimate.totalAmount)}`,
-    html,
-  })
+  const subject = `Estimate #${estimate.estimateNumber}: ${estimate.title} — ${formatCents(estimate.totalAmount)}`
+
+  try {
+    await sendMail({
+      to: [recipientEmail],
+      subject,
+      html,
+    })
+    await prisma.tH_TicketEmailOutbound.create({
+      data: {
+        mode: 'ESTIMATE_SENT',
+        toEmail: recipientEmail.toLowerCase(),
+        toName: estimate.contact
+          ? `${estimate.contact.firstName} ${estimate.contact.lastName}`.trim()
+          : estimate.client.name,
+        subject,
+        status: 'SENT',
+        metadata: {
+          estimateId: estimate.id,
+          estimateNumber: estimate.estimateNumber,
+          totalAmount: estimate.totalAmount,
+        },
+      },
+    })
+  } catch (e) {
+    await prisma.tH_TicketEmailOutbound.create({
+      data: {
+        mode: 'ESTIMATE_SENT',
+        toEmail: recipientEmail.toLowerCase(),
+        toName: estimate.contact
+          ? `${estimate.contact.firstName} ${estimate.contact.lastName}`.trim()
+          : estimate.client.name,
+        subject,
+        status: 'FAILED',
+        errorMessage: e instanceof Error ? e.message : String(e),
+        metadata: {
+          estimateId: estimate.id,
+          estimateNumber: estimate.estimateNumber,
+        },
+      },
+    }).catch(() => {})
+    throw e
+  }
 }

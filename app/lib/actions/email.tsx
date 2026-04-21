@@ -141,6 +141,24 @@ export async function sendInvoiceEmail(
       ],
     })
 
+    await prisma.tH_TicketEmailOutbound.create({
+      data: {
+        mode: 'INVOICE_SENT',
+        toEmail: to[0].toLowerCase(),
+        toName: invoice.client.name,
+        subject,
+        status: 'SENT',
+        metadata: {
+          invoiceId,
+          invoiceNumber: invoice.invoiceNumber,
+          totalAmount: invoice.totalAmount,
+          toList: to,
+          cc,
+          hasPayLink: Boolean(payUrl),
+        },
+      },
+    }).catch((e) => console.error('[actions/email] outbound log write failed', e))
+
     // Transition the invoice to SENT and lock the charges in the same tx
     // as the DB state flip. The email already went out — we're just
     // recording it.

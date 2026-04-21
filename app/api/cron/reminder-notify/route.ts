@@ -83,7 +83,7 @@ export async function GET(req: NextRequest) {
       notifyCount: reminder.notifyCount,
     })
 
-    // Log delivery
+    // Log delivery (reminder-specific audit)
     await prisma.tH_ReminderDelivery.create({
       data: {
         reminderId: reminder.id,
@@ -92,6 +92,24 @@ export async function GET(req: NextRequest) {
         error,
       },
     })
+
+    // Also mirror to the shared outbound log so /admin/messages sees it
+    await prisma.tH_TicketEmailOutbound.create({
+      data: {
+        mode: 'REMINDER_NOTIFY',
+        toEmail: contact.email.toLowerCase(),
+        toName: `${contact.firstName} ${contact.lastName}`.trim(),
+        subject: `Reminder: ${reminder.title}`,
+        status: error ? 'FAILED' : 'SENT',
+        errorMessage: error,
+        metadata: {
+          reminderId: reminder.id,
+          source: reminder.source,
+          recurrence: reminder.recurrence,
+          notifyCount: reminder.notifyCount + 1,
+        },
+      },
+    }).catch((e) => console.error('[reminder-notify] outbound log write failed', e))
 
     // Update reminder
     const intervalMs = RECURRENCE_MS[reminder.recurrence]
