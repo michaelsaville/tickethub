@@ -16,24 +16,37 @@
  * scope: estimates | invoices | both (default)
  */
 
-import { migrateEstimates, migrateInvoices } from '../app/lib/syncro-migrate'
+import {
+  migrateEstimates,
+  migrateEstimateItems,
+  migrateInvoices,
+} from '../app/lib/syncro-migrate'
 
 async function main() {
-  const scope = (process.argv[2] ?? 'both') as 'estimates' | 'invoices' | 'both'
+  const scope = (process.argv[2] ?? 'both') as
+    | 'estimates'
+    | 'estimate-items'
+    | 'invoices'
+    | 'both'
+    | 'all-billing'
   const started = Date.now()
 
-  if (scope === 'estimates' || scope === 'both') {
-    console.log('[syncro-billing] migrating estimates…')
-    const res = await migrateEstimates()
-    console.log(`[syncro-billing] estimates: imported=${res.imported} skipped=${res.skipped} errors=${res.errors.length}`)
-    for (const e of res.errors.slice(0, 20)) console.log(`  - ${e}`)
-    if (res.errors.length > 20) console.log(`  … +${res.errors.length - 20} more`)
+  const runners: Record<string, () => Promise<{ imported: number; skipped: number; errors: string[] }>> = {
+    estimates: migrateEstimates,
+    'estimate-items': migrateEstimateItems,
+    invoices: migrateInvoices,
   }
+  const scopes =
+    scope === 'both' ? ['estimates', 'invoices'] :
+    scope === 'all-billing' ? ['estimates', 'estimate-items', 'invoices'] :
+    [scope]
 
-  if (scope === 'invoices' || scope === 'both') {
-    console.log('[syncro-billing] migrating invoices…')
-    const res = await migrateInvoices()
-    console.log(`[syncro-billing] invoices: imported=${res.imported} skipped=${res.skipped} errors=${res.errors.length}`)
+  for (const s of scopes) {
+    const fn = runners[s]
+    if (!fn) { console.error(`[syncro-billing] unknown scope "${s}"`); continue }
+    console.log(`[syncro-billing] running ${s}…`)
+    const res = await fn()
+    console.log(`[syncro-billing] ${s}: imported=${res.imported} skipped=${res.skipped} errors=${res.errors.length}`)
     for (const e of res.errors.slice(0, 20)) console.log(`  - ${e}`)
     if (res.errors.length > 20) console.log(`  … +${res.errors.length - 20} more`)
   }

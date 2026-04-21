@@ -22,6 +22,7 @@ export interface FullMigrationResult {
   sites: MigrationResult
   tickets: MigrationResult
   estimates: MigrationResult
+  estimateItems: MigrationResult
   invoices: MigrationResult
 }
 
@@ -530,6 +531,82 @@ export async function migrateEstimates(): Promise<MigrationResult> {
   return result
 }
 
+/**
+ * Backfill TH_EstimateItem rows for previously-imported Syncro
+ * estimates. Requires a second HTTP fetch per estimate (Syncro's list
+ * endpoint omits line_items) so this is broken out from
+ * migrateEstimates() to keep the first pass fast.
+ *
+ * Uses a single synthetic TH_Item ("Imported line item", code
+ * syncro-import-legacy, type EXPENSE) so the catalog doesn't bloat
+ * with per-line-item rows nobody will ever reuse. The actual Syncro
+ * name goes into TH_EstimateItem.description; the portal detail view
+ * shows both columns.
+ */
+export async function migrateEstimateItems(): Promise<MigrationResult> {
+  if (!syncroConfigured()) throw new Error('Syncro not configured')
+
+  const result: MigrationResult = { imported: 0, skipped: 0, errors: [] }
+
+  const legacyItem = await prisma.tH_Item.upsert({
+    where: { code: 'syncro-import-legacy' },
+    update: {},
+    create: {
+      name: 'Imported line item',
+      code: 'syncro-import-legacy',
+      type: 'EXPENSE',
+      defaultPrice: 0,
+      taxable: true,
+      isActive: false, // don't show in staff "add item" pickers
+    },
+    select: { id: true },
+  })
+
+  const estimates = await prisma.tH_Estimate.findMany({
+    where: { externalRef: { startsWith: 'syncro:' } },
+    select: {
+      id: true,
+      externalRef: true,
+      _count: { select: { items: true } },
+    },
+  })
+
+  for (const est of estimates) {
+    if (est._count.items > 0) { result.skipped++; continue }
+    const syncroId = est.externalRef?.replace(/^syncro:/, '')
+    if (!syncroId) { result.skipped++; continue }
+
+    try {
+      const res = await syncroFetch(`/estimates/${syncroId}`)
+      if (!res.ok) {
+        result.errors.push(`Estimate ${syncroId}: HTTP ${res.status}`)
+        continue
+      }
+      const json = (await res.json()) as { estimate?: { line_items?: any[] } }
+      const items: any[] = json.estimate?.line_items ?? []
+
+      if (items.length === 0) { result.skipped++; continue }
+
+      await prisma.tH_EstimateItem.createMany({
+        data: items.map((li, idx) => ({
+          estimateId: est.id,
+          itemId: legacyItem.id,
+          description: li.name?.trim() || null,
+          quantity: parseFloat(li.quantity ?? '1') || 1,
+          unitPrice: toCents(li.price),
+          totalPrice: toCents(li.price) * (parseFloat(li.quantity ?? '1') || 1) || toCents(li.price),
+          sortOrder: typeof li.position === 'number' ? li.position : idx,
+        })),
+      })
+      result.imported += items.length
+    } catch (err: any) {
+      result.errors.push(`Estimate ${syncroId}: ${err.message}`)
+    }
+  }
+
+  return result
+}
+
 // ── Invoices ───────────────────────────────────────────────────────────────
 
 /**
@@ -658,9 +735,13 @@ export async function runFullMigration(
   const estimates = await migrateEstimates()
   log(`Estimates done: ${estimates.imported} imported, ${estimates.skipped} skipped`)
 
+  log('Starting estimate line-item migration...')
+  const estimateItems = await migrateEstimateItems()
+  log(`Estimate items done: ${estimateItems.imported} imported, ${estimateItems.skipped} skipped`)
+
   log('Starting invoice migration...')
   const invoices = await migrateInvoices()
   log(`Invoices done: ${invoices.imported} imported, ${invoices.skipped} skipped`)
 
-  return { customers, contacts, sites, tickets, estimates, invoices }
+  return { customers, contacts, sites, tickets, estimates, estimateItems, invoices }
 }

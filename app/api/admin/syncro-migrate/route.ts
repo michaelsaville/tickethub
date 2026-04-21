@@ -8,6 +8,7 @@ import {
   migrateSites,
   migrateTickets,
   migrateEstimates,
+  migrateEstimateItems,
   migrateInvoices,
   runFullMigration,
 } from '@/app/lib/syncro-migrate'
@@ -79,6 +80,9 @@ export async function POST(req: Request) {
         break
       case 'estimates':
         result = await migrateEstimates()
+        break
+      case 'estimate-items':
+        result = await migrateEstimateItems()
         break
       case 'invoices':
         result = await migrateInvoices()
