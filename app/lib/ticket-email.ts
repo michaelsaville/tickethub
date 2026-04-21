@@ -35,13 +35,13 @@ function masterEnabled(): boolean {
   return process.env.TICKETHUB_CLIENT_EMAILS_ENABLED === 'true'
 }
 
-function subjectFor(mode: Mode, ticketNumber: number, title: string): string {
+export function subjectFor(mode: Mode, ticketNumber: number, title: string): string {
   const prefix = `[#TH-${ticketNumber}]`
   if (mode === 'NEW_TICKET') return `${prefix} ${title}`
   return `${prefix} Re: ${title}`
 }
 
-function bodyFor(args: {
+export function bodyFor(args: {
   mode: Mode
   clientName: string
   contactFirstName: string | null

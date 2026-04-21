@@ -3,190 +3,17 @@ import {
   Page,
   Text,
   View,
-  StyleSheet,
+  Image,
 } from '@react-pdf/renderer'
 import { formatCents } from '@/app/lib/billing'
 import { formatRate } from '@/app/lib/tax'
 import { ORG } from '@/app/lib/org'
-
-// React-PDF uses inline styles via StyleSheet.create(). Units default to
-// points (72/inch) for layout, which maps well to a Letter/A4 page.
-
-const styles = StyleSheet.create({
-  page: {
-    padding: 40,
-    fontSize: 10,
-    fontFamily: 'Helvetica',
-    color: '#111',
-  },
-  header: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    marginBottom: 24,
-    paddingBottom: 16,
-    borderBottomWidth: 2,
-    borderBottomColor: '#F97316',
-  },
-  orgBlock: {
-    maxWidth: 240,
-  },
-  orgName: {
-    fontSize: 18,
-    fontFamily: 'Helvetica-Bold',
-    color: '#F97316',
-  },
-  orgTagline: {
-    fontSize: 9,
-    color: '#666',
-    marginTop: 2,
-  },
-  orgLine: {
-    fontSize: 9,
-    color: '#333',
-    marginTop: 1,
-  },
-  invoiceBlock: {
-    alignItems: 'flex-end',
-  },
-  invoiceLabel: {
-    fontSize: 20,
-    fontFamily: 'Helvetica-Bold',
-    letterSpacing: 2,
-    color: '#111',
-  },
-  invoiceNumber: {
-    fontSize: 11,
-    fontFamily: 'Helvetica-Bold',
-    marginTop: 4,
-  },
-  invoiceMeta: {
-    fontSize: 9,
-    color: '#555',
-    marginTop: 2,
-  },
-  billTo: {
-    marginBottom: 20,
-  },
-  billToLabel: {
-    fontSize: 8,
-    color: '#666',
-    textTransform: 'uppercase',
-    letterSpacing: 1,
-    marginBottom: 3,
-  },
-  billToName: {
-    fontSize: 12,
-    fontFamily: 'Helvetica-Bold',
-  },
-  table: {
-    marginTop: 8,
-    borderTopWidth: 1,
-    borderTopColor: '#ddd',
-    borderBottomWidth: 1,
-    borderBottomColor: '#ddd',
-  },
-  tableHeader: {
-    flexDirection: 'row',
-    backgroundColor: '#f5f5f5',
-    paddingVertical: 6,
-    paddingHorizontal: 4,
-    borderBottomWidth: 1,
-    borderBottomColor: '#ddd',
-  },
-  tableRow: {
-    flexDirection: 'row',
-    paddingVertical: 6,
-    paddingHorizontal: 4,
-    borderBottomWidth: 0.5,
-    borderBottomColor: '#eee',
-  },
-  colDescription: { flex: 1 },
-  colQty: { width: 60, textAlign: 'right' },
-  colRate: { width: 70, textAlign: 'right' },
-  colAmount: { width: 80, textAlign: 'right' },
-  th: {
-    fontSize: 8,
-    fontFamily: 'Helvetica-Bold',
-    color: '#444',
-    textTransform: 'uppercase',
-    letterSpacing: 0.5,
-  },
-  td: { fontSize: 9 },
-  itemDescription: {
-    fontSize: 9,
-    color: '#666',
-    marginTop: 1,
-  },
-  ticketRef: {
-    fontSize: 8,
-    color: '#888',
-    marginTop: 1,
-  },
-  totals: {
-    marginTop: 16,
-    marginLeft: 'auto',
-    width: 260,
-  },
-  totalRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    paddingVertical: 3,
-  },
-  totalLabel: {
-    fontSize: 9,
-    color: '#555',
-  },
-  totalValue: {
-    fontSize: 9,
-    fontFamily: 'Helvetica',
-  },
-  grandTotal: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    paddingTop: 8,
-    marginTop: 4,
-    borderTopWidth: 2,
-    borderTopColor: '#111',
-  },
-  grandTotalLabel: {
-    fontSize: 12,
-    fontFamily: 'Helvetica-Bold',
-  },
-  grandTotalValue: {
-    fontSize: 14,
-    fontFamily: 'Helvetica-Bold',
-  },
-  notes: {
-    marginTop: 24,
-    padding: 10,
-    borderLeftWidth: 3,
-    borderLeftColor: '#F97316',
-    backgroundColor: '#fef3e7',
-  },
-  notesLabel: {
-    fontSize: 8,
-    color: '#666',
-    textTransform: 'uppercase',
-    letterSpacing: 1,
-    marginBottom: 3,
-  },
-  notesBody: {
-    fontSize: 9,
-    color: '#333',
-  },
-  footer: {
-    position: 'absolute',
-    bottom: 30,
-    left: 40,
-    right: 40,
-    textAlign: 'center',
-    fontSize: 8,
-    color: '#888',
-    borderTopWidth: 1,
-    borderTopColor: '#eee',
-    paddingTop: 6,
-  },
-})
+import {
+  DEFAULT_INVOICE_TEMPLATE_CONFIG,
+  type InvoiceTemplateConfig,
+  type SectionId,
+} from '@/app/types/invoice-template'
+import { buildInvoiceStyles } from './invoiceStyles'
 
 export interface InvoicePdfData {
   invoiceNumber: number
@@ -215,29 +42,153 @@ export interface InvoicePdfData {
   }>
 }
 
-export function InvoicePdf({ data }: { data: InvoicePdfData }) {
+function field(
+  config: InvoiceTemplateConfig,
+  sectionId: SectionId,
+  key: string,
+): boolean {
+  const section = config.sections.find((s) => s.id === sectionId)
+  if (!section || !section.enabled) return false
+  return section.fields[key] !== false
+}
+
+function sectionEnabled(
+  config: InvoiceTemplateConfig,
+  id: SectionId,
+): boolean {
+  return config.sections.find((s) => s.id === id)?.enabled ?? false
+}
+
+export function InvoicePdf({
+  data,
+  templateConfig,
+  logoUrl,
+}: {
+  data: InvoicePdfData
+  templateConfig?: InvoiceTemplateConfig
+  logoUrl?: string | null
+}) {
+  const config = templateConfig ?? DEFAULT_INVOICE_TEMPLATE_CONFIG
+  const styles = buildInvoiceStyles(config)
+  const sortedSections = [...config.sections].sort(
+    (a, b) => a.sortOrder - b.sortOrder,
+  )
+
   return (
     <Document
       title={`Invoice #${data.invoiceNumber}`}
       author={ORG.name}
       subject={`Invoice for ${data.client.name}`}
     >
-      <Page size="LETTER" style={styles.page}>
-        {/* Header */}
-        <View style={styles.header}>
-          <View style={styles.orgBlock}>
-            <Text style={styles.orgName}>{ORG.name}</Text>
-            <Text style={styles.orgTagline}>{ORG.tagline}</Text>
+      <Page size={config.globalStyles.pageSize} style={styles.page}>
+        {sortedSections.map((section) => {
+          if (!section.enabled) return null
+          switch (section.id) {
+            case 'header':
+              return (
+                <HeaderSection
+                  key="header"
+                  data={data}
+                  config={config}
+                  styles={styles}
+                  logoUrl={logoUrl}
+                />
+              )
+            case 'billTo':
+              return (
+                <BillToSection
+                  key="billTo"
+                  data={data}
+                  config={config}
+                  styles={styles}
+                />
+              )
+            case 'lineItems':
+              return (
+                <LineItemsSection
+                  key="lineItems"
+                  data={data}
+                  config={config}
+                  styles={styles}
+                />
+              )
+            case 'totals':
+              return (
+                <TotalsSection
+                  key="totals"
+                  data={data}
+                  config={config}
+                  styles={styles}
+                />
+              )
+            case 'notes':
+              return data.notes ? (
+                <NotesSection key="notes" data={data} styles={styles} />
+              ) : null
+            case 'footer':
+              return (
+                <FooterSection
+                  key="footer"
+                  config={config}
+                  styles={styles}
+                />
+              )
+            default:
+              return null
+          }
+        })}
+      </Page>
+    </Document>
+  )
+}
+
+function HeaderSection({
+  data,
+  config,
+  styles,
+  logoUrl,
+}: {
+  data: InvoicePdfData
+  config: InvoiceTemplateConfig
+  styles: ReturnType<typeof buildInvoiceStyles>
+  logoUrl?: string | null
+}) {
+  return (
+    <View style={styles.header}>
+      <View style={styles.orgBlock}>
+        {logoUrl && field(config, 'header', 'logo') && (
+          <Image src={logoUrl} style={styles.logo} />
+        )}
+        {field(config, 'header', 'orgName') && (
+          <Text style={styles.orgName}>{ORG.name}</Text>
+        )}
+        {field(config, 'header', 'tagline') && (
+          <Text style={styles.orgTagline}>{ORG.tagline}</Text>
+        )}
+        {field(config, 'header', 'address') && (
+          <>
             <Text style={styles.orgLine}>{ORG.address}</Text>
             <Text style={styles.orgLine}>
               {ORG.city}, {ORG.state} {ORG.zip}
             </Text>
-            <Text style={styles.orgLine}>{ORG.phone}</Text>
-            <Text style={styles.orgLine}>{ORG.email}</Text>
-          </View>
-          <View style={styles.invoiceBlock}>
+          </>
+        )}
+        {field(config, 'header', 'phone') && (
+          <Text style={styles.orgLine}>{ORG.phone}</Text>
+        )}
+        {field(config, 'header', 'email') && (
+          <Text style={styles.orgLine}>{ORG.email}</Text>
+        )}
+      </View>
+      <View style={styles.invoiceBlock}>
+        {field(config, 'header', 'invoiceNumber') && (
+          <>
             <Text style={styles.invoiceLabel}>INVOICE</Text>
             <Text style={styles.invoiceNumber}>#{data.invoiceNumber}</Text>
+          </>
+        )}
+        {field(config, 'header', 'dates') && (
+          <>
             <Text style={styles.invoiceMeta}>
               Issued {formatDate(data.issueDate)}
             </Text>
@@ -246,107 +197,197 @@ export function InvoicePdf({ data }: { data: InvoicePdfData }) {
                 Due {formatDate(data.dueDate)}
               </Text>
             )}
-            <Text style={styles.invoiceMeta}>Status: {data.status}</Text>
-          </View>
-        </View>
+          </>
+        )}
+        {field(config, 'header', 'status') && (
+          <Text style={styles.invoiceMeta}>Status: {data.status}</Text>
+        )}
+      </View>
+    </View>
+  )
+}
 
-        {/* Bill-to */}
-        <View style={styles.billTo}>
-          <Text style={styles.billToLabel}>Bill To</Text>
-          <Text style={styles.billToName}>{data.client.name}</Text>
-          {data.client.billingState && (
-            <Text style={styles.orgLine}>
-              Tax State: {data.client.billingState}
-            </Text>
-          )}
-        </View>
+function BillToSection({
+  data,
+  config,
+  styles,
+}: {
+  data: InvoicePdfData
+  config: InvoiceTemplateConfig
+  styles: ReturnType<typeof buildInvoiceStyles>
+}) {
+  return (
+    <View style={styles.billTo}>
+      <Text style={styles.billToLabel}>Bill To</Text>
+      {field(config, 'billTo', 'clientName') && (
+        <Text style={styles.billToName}>{data.client.name}</Text>
+      )}
+      {field(config, 'billTo', 'billingState') && data.client.billingState && (
+        <Text style={styles.orgLine}>
+          Tax State: {data.client.billingState}
+        </Text>
+      )}
+    </View>
+  )
+}
 
-        {/* Line items */}
-        <View style={styles.table}>
-          <View style={styles.tableHeader}>
-            <View style={styles.colDescription}>
-              <Text style={styles.th}>Description</Text>
-            </View>
-            <View style={styles.colQty}>
-              <Text style={styles.th}>Qty / Time</Text>
-            </View>
-            <View style={styles.colRate}>
-              <Text style={styles.th}>Rate</Text>
-            </View>
-            <View style={styles.colAmount}>
-              <Text style={styles.th}>Amount</Text>
-            </View>
-          </View>
-          {data.lineItems.map((line, i) => (
-            <View key={i} style={styles.tableRow} wrap={false}>
-              <View style={styles.colDescription}>
-                <Text style={styles.td}>{line.itemName}</Text>
-                {line.description && (
-                  <Text style={styles.itemDescription}>{line.description}</Text>
-                )}
-                {line.ticket && (
-                  <Text style={styles.ticketRef}>
-                    Ticket #{line.ticket.ticketNumber} · {line.ticket.title}
-                  </Text>
-                )}
-              </View>
-              <View style={styles.colQty}>
-                <Text style={styles.td}>
-                  {line.timeChargedMinutes != null
-                    ? formatMinutes(line.timeChargedMinutes)
-                    : line.quantity.toString()}
-                </Text>
-              </View>
-              <View style={styles.colRate}>
-                <Text style={styles.td}>{formatCents(line.unitPrice)}</Text>
-              </View>
-              <View style={styles.colAmount}>
-                <Text style={styles.td}>{formatCents(line.totalPrice)}</Text>
-              </View>
-            </View>
-          ))}
-        </View>
+function LineItemsSection({
+  data,
+  config,
+  styles,
+}: {
+  data: InvoicePdfData
+  config: InvoiceTemplateConfig
+  styles: ReturnType<typeof buildInvoiceStyles>
+}) {
+  const showDesc = field(config, 'lineItems', 'description')
+  const showQty = field(config, 'lineItems', 'quantity')
+  const showRate = field(config, 'lineItems', 'rate')
+  const showAmount = field(config, 'lineItems', 'amount')
+  const showTicket = field(config, 'lineItems', 'ticketRef')
 
-        {/* Totals */}
-        <View style={styles.totals}>
-          <View style={styles.totalRow}>
-            <Text style={styles.totalLabel}>Subtotal</Text>
-            <Text style={styles.totalValue}>{formatCents(data.subtotal)}</Text>
-          </View>
-          <View style={styles.totalRow}>
-            <Text style={styles.totalLabel}>
-              Taxable Portion ({formatRate(data.taxRate)} {data.taxState ?? ''})
-            </Text>
-            <Text style={styles.totalValue}>
-              {formatCents(data.taxableSubtotal)}
-            </Text>
-          </View>
-          <View style={styles.totalRow}>
-            <Text style={styles.totalLabel}>Sales Tax</Text>
-            <Text style={styles.totalValue}>{formatCents(data.taxAmount)}</Text>
-          </View>
-          <View style={styles.grandTotal}>
-            <Text style={styles.grandTotalLabel}>TOTAL DUE</Text>
-            <Text style={styles.grandTotalValue}>
-              {formatCents(data.totalAmount)}
-            </Text>
-          </View>
-        </View>
-
-        {/* Notes */}
-        {data.notes && (
-          <View style={styles.notes}>
-            <Text style={styles.notesLabel}>Notes</Text>
-            <Text style={styles.notesBody}>{data.notes}</Text>
+  return (
+    <View style={styles.table}>
+      <View style={styles.tableHeader}>
+        {showDesc && (
+          <View style={styles.colDescription}>
+            <Text style={styles.th}>Description</Text>
           </View>
         )}
+        {showQty && (
+          <View style={styles.colQty}>
+            <Text style={styles.th}>Qty / Time</Text>
+          </View>
+        )}
+        {showRate && (
+          <View style={styles.colRate}>
+            <Text style={styles.th}>Rate</Text>
+          </View>
+        )}
+        {showAmount && (
+          <View style={styles.colAmount}>
+            <Text style={styles.th}>Amount</Text>
+          </View>
+        )}
+      </View>
+      {data.lineItems.map((line, i) => (
+        <View key={i} style={styles.tableRow} wrap={false}>
+          {showDesc && (
+            <View style={styles.colDescription}>
+              <Text style={styles.td}>{line.itemName}</Text>
+              {line.description && (
+                <Text style={styles.itemDescription}>{line.description}</Text>
+              )}
+              {showTicket && line.ticket && (
+                <Text style={styles.ticketRef}>
+                  Ticket #{line.ticket.ticketNumber} · {line.ticket.title}
+                </Text>
+              )}
+            </View>
+          )}
+          {showQty && (
+            <View style={styles.colQty}>
+              <Text style={styles.td}>
+                {line.timeChargedMinutes != null
+                  ? formatMinutes(line.timeChargedMinutes)
+                  : line.quantity.toString()}
+              </Text>
+            </View>
+          )}
+          {showRate && (
+            <View style={styles.colRate}>
+              <Text style={styles.td}>{formatCents(line.unitPrice)}</Text>
+            </View>
+          )}
+          {showAmount && (
+            <View style={styles.colAmount}>
+              <Text style={styles.td}>{formatCents(line.totalPrice)}</Text>
+            </View>
+          )}
+        </View>
+      ))}
+    </View>
+  )
+}
 
-        {/* Footer */}
-        <Text style={styles.footer} fixed>
-          {ORG.name} · {ORG.website} · Questions? {ORG.email}
-        </Text>
-      </Page>
-    </Document>
+function TotalsSection({
+  data,
+  config,
+  styles,
+}: {
+  data: InvoicePdfData
+  config: InvoiceTemplateConfig
+  styles: ReturnType<typeof buildInvoiceStyles>
+}) {
+  return (
+    <View style={styles.totals}>
+      {field(config, 'totals', 'subtotal') && (
+        <View style={styles.totalRow}>
+          <Text style={styles.totalLabel}>Subtotal</Text>
+          <Text style={styles.totalValue}>{formatCents(data.subtotal)}</Text>
+        </View>
+      )}
+      {field(config, 'totals', 'taxablePortion') && (
+        <View style={styles.totalRow}>
+          <Text style={styles.totalLabel}>
+            Taxable Portion ({formatRate(data.taxRate)} {data.taxState ?? ''})
+          </Text>
+          <Text style={styles.totalValue}>
+            {formatCents(data.taxableSubtotal)}
+          </Text>
+        </View>
+      )}
+      {field(config, 'totals', 'salesTax') && (
+        <View style={styles.totalRow}>
+          <Text style={styles.totalLabel}>Sales Tax</Text>
+          <Text style={styles.totalValue}>{formatCents(data.taxAmount)}</Text>
+        </View>
+      )}
+      {field(config, 'totals', 'grandTotal') && (
+        <View style={styles.grandTotal}>
+          <Text style={styles.grandTotalLabel}>TOTAL DUE</Text>
+          <Text style={styles.grandTotalValue}>
+            {formatCents(data.totalAmount)}
+          </Text>
+        </View>
+      )}
+    </View>
+  )
+}
+
+function NotesSection({
+  data,
+  styles,
+}: {
+  data: InvoicePdfData
+  styles: ReturnType<typeof buildInvoiceStyles>
+}) {
+  return (
+    <View style={styles.notes}>
+      <Text style={styles.notesLabel}>Notes</Text>
+      <Text style={styles.notesBody}>{data.notes}</Text>
+    </View>
+  )
+}
+
+function FooterSection({
+  config,
+  styles,
+}: {
+  config: InvoiceTemplateConfig
+  styles: ReturnType<typeof buildInvoiceStyles>
+}) {
+  const parts: string[] = []
+  if (field(config, 'footer', 'orgName')) parts.push(ORG.name)
+  if (field(config, 'footer', 'website')) parts.push(ORG.website)
+  if (field(config, 'footer', 'email')) parts.push(`Questions? ${ORG.email}`)
+
+  if (parts.length === 0) return null
+
+  return (
+    <Text style={styles.footer} fixed>
+      {parts.join(' · ')}
+    </Text>
   )
 }
 

@@ -20,6 +20,12 @@ const STATUSES: TH_TicketStatus[] = [
   'CANCELLED',
 ]
 const PRIORITIES: TH_TicketPriority[] = ['URGENT', 'HIGH', 'MEDIUM', 'LOW']
+const BOARDS = [
+  'On-Site',
+  'Remote Support',
+  'In Shop',
+  'Workstation For Sale',
+] as const
 
 export function TicketProperties({
   ticketId,
@@ -27,6 +33,7 @@ export function TicketProperties({
   priority: initialPriority,
   assignedToId: initialAssignedToId,
   contractId: initialContractId,
+  board: initialBoard,
   type,
   techs,
   contracts,
@@ -36,6 +43,7 @@ export function TicketProperties({
   priority: TH_TicketPriority
   assignedToId: string | null
   contractId: string | null
+  board: string | null
   type: TH_TicketType
   techs: Array<{ id: string; name: string }>
   contracts: Array<{ id: string; name: string; type: string; isGlobal: boolean }>
@@ -45,6 +53,7 @@ export function TicketProperties({
   const [priority, setPriority] = useState(initialPriority)
   const [assignedToId, setAssignedToId] = useState(initialAssignedToId ?? '')
   const [contractId, setContractId] = useState(initialContractId ?? '')
+  const [board, setBoard] = useState(initialBoard ?? '')
   const [isPending, startTransition] = useTransition()
   const [err, setErr] = useState<string | null>(null)
   const [queuedMsg, setQueuedMsg] = useState<string | null>(null)
@@ -128,6 +137,21 @@ export function TicketProperties({
     )
   }
 
+  function changeBoard(v: string) {
+    setBoard(v)
+    patch(
+      {
+        type: 'UPDATE_BOARD',
+        entityType: 'TICKET',
+        entityId: ticketId,
+        url: `/api/tickets/${ticketId}/board`,
+        body: { board: v || null },
+      },
+      'board change',
+      () => setBoard(initialBoard ?? ''),
+    )
+  }
+
   return (
     <div className="th-card space-y-3">
       <div>
@@ -145,6 +169,29 @@ export function TicketProperties({
               {s.replace(/_/g, ' ')}
             </option>
           ))}
+        </select>
+      </div>
+
+      <div>
+        <label className="mb-1 block font-mono text-[10px] uppercase tracking-wider text-th-text-muted">
+          Board
+        </label>
+        <select
+          value={board}
+          disabled={isPending}
+          onChange={(e) => changeBoard(e.target.value)}
+          className="th-input"
+        >
+          <option value="">None</option>
+          {BOARDS.map((b) => (
+            <option key={b} value={b}>
+              {b}
+            </option>
+          ))}
+          {/* Preserve any legacy board value not in the known list */}
+          {board && !BOARDS.includes(board as (typeof BOARDS)[number]) && (
+            <option value={board}>{board}</option>
+          )}
         </select>
       </div>
 

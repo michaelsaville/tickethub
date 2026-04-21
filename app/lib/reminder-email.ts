@@ -1,7 +1,7 @@
 import 'server-only'
 import { m365Configured, sendMail } from '@/app/lib/m365'
 
-interface ReminderEmailInput {
+export interface ReminderEmailInput {
   toEmail: string
   toName: string
   title: string
@@ -12,7 +12,7 @@ interface ReminderEmailInput {
   notifyCount: number
 }
 
-function buildHtml(input: ReminderEmailInput): string {
+export function buildReminderHtml(input: ReminderEmailInput): string {
   const greeting = `Hi ${input.toName},`
   const ordinal =
     input.notifyCount === 0
@@ -73,7 +73,7 @@ export async function sendReminderEmail(
 
   try {
     const subject = `Reminder: ${input.title}`
-    const html = buildHtml(input)
+    const html = buildReminderHtml(input)
 
     await sendMail({
       to: [input.toEmail],

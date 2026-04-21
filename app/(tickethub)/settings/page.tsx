@@ -26,6 +26,21 @@ const GROUPS = [
     ],
   },
   {
+    title: 'Templates',
+    items: [
+      {
+        href: '/settings/checklist-templates',
+        title: 'Checklist Templates',
+        description: 'Reusable SOP checklists for tickets',
+      },
+      {
+        href: '/settings/invoice-template',
+        title: 'Invoice Template',
+        description: 'Customize invoice PDF layout, colors, and logo',
+      },
+    ],
+  },
+  {
     title: 'People',
     items: [
       {
@@ -57,6 +72,26 @@ const GROUPS = [
         href: '/settings/integrations',
         title: 'Integrations',
         description: 'ConnectWise RMM, M365, Syncro, QuickBooks',
+      },
+    ],
+  },
+  {
+    title: 'Automations',
+    items: [
+      {
+        href: '/settings/automations',
+        title: 'Workflow Automations',
+        description: 'Master switches — on-site ticket workflow, notifications',
+      },
+    ],
+  },
+  {
+    title: 'Customer Communications',
+    items: [
+      {
+        href: '/admin/messages',
+        title: 'Messages',
+        description: 'Email templates (with sample previews) + full send log',
       },
     ],
   },

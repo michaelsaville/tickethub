@@ -14,6 +14,7 @@ export type SyncOperationType =
   | 'UPDATE_PRIORITY'
   | 'UPDATE_ASSIGNEE'
   | 'UPDATE_CONTRACT'
+  | 'UPDATE_BOARD'
   | 'ADD_CHARGE'
   | 'ADD_PART'
   | 'ATTACH_PHOTO'

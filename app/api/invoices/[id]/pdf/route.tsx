@@ -4,6 +4,7 @@ import { renderToBuffer, type DocumentProps } from '@react-pdf/renderer'
 import { prisma } from '@/app/lib/prisma'
 import { requireAuth } from '@/app/lib/api-auth'
 import { InvoicePdf, type InvoicePdfData } from '@/app/lib/pdf/InvoicePdf'
+import { getInvoiceTemplateConfig } from '@/app/lib/actions/invoice-template'
 
 // Force the Node runtime — @react-pdf/renderer needs Node's Buffer +
 // fs-level font loading, not the Edge runtime.
@@ -64,12 +65,8 @@ export async function GET(
   }
 
   try {
-    // InvoicePdf returns a <Document>. Call it as a function to get a
-    // Document element directly — @react-pdf/renderer's renderToBuffer
-    // expects ReactElement<DocumentProps>, not an arbitrary component
-    // wrapper. This also avoids the React error #31 that can come from
-    // the new JSX transform producing incompatible element shapes.
-    const element = InvoicePdf({ data }) as ReactElement<DocumentProps>
+    const { config: templateConfig, logoUrl } = await getInvoiceTemplateConfig()
+    const element = InvoicePdf({ data, templateConfig, logoUrl }) as ReactElement<DocumentProps>
     const buffer = await renderToBuffer(element)
     const download = req.nextUrl.searchParams.get('download') === '1'
     const filename = `invoice-${invoice.invoiceNumber}.pdf`

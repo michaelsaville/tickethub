@@ -643,6 +643,11 @@ model TH_Appointment {
   chargeId String?     @unique
   charge   TH_Charge?  @relation(fields: [chargeId], references: [id])
 
+  /// Set when a staff member triggered the on-site confirmation email
+  /// from the dispatch board. Drives the sent/unsent indicator on the
+  /// appointment block.
+  confirmationEmailSentAt DateTime?
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
@@ -676,6 +681,9 @@ model TH_User {
   role       String  @default("TECH")
   hourlyRate Int?
   isActive   Boolean @default(true)
+  /// True = appears as a column on the /schedule dispatch grid.
+  /// Independent of role so office-only admins can be excluded.
+  isOnsiteTech Boolean @default(false)
 
   togglToken    String?
   todoistToken  String?
@@ -710,6 +718,8 @@ model TH_User {
   locationPings    TH_LocationPing[]   @relation("LocationPings")
   stoppingPoints   TH_StoppingPoint[]  @relation("StoppingPoints")
   remindersCreated TH_Reminder[]       @relation("ReminderCreator")
+  ticketViews      TH_TicketView[]     @relation("TicketViews")
+  viewPreference   TH_UserViewPreference? @relation("ViewPreference")
 
   @@map("th_users")
   @@schema("tickethub")
@@ -771,10 +781,25 @@ model TH_PendingInboundEmail {
 ///   3. Loop prevention (see the ignoreUntil field)
 model TH_TicketEmailOutbound {
   id             String   @id @default(cuid())
-  ticketId       String
-  mode           String   // 'NEW_TICKET' | 'STAFF_REPLY'
+  /// Nullable so non-ticket messages (invoices, estimates, reminders
+  /// that aren't tied to a single ticket) can share this log. Existing
+  /// ticket-scoped senders keep populating it.
+  ticketId       String?
+  /// Registry key from app/lib/messaging/templates.ts, e.g.
+  /// NEW_TICKET, STAFF_REPLY, ONSITE_CONFIRMATION, REMINDER_NOTIFY,
+  /// ESTIMATE_SENT, INVOICE_SENT.
+  mode           String
   toEmail        String
+  /// Buyer/contact display name when available.
+  toName         String?
   subject        String
+  /// First ~2 KB of rendered body for log preview. Nullable — older
+  /// rows predate this column and leave it empty.
+  bodyPreview    String?
+  status         String   @default("SENT")  // SENT | FAILED | QUEUED
+  errorMessage   String?
+  /// Arbitrary context (e.g. { estimateId, invoiceId, appointmentId }).
+  metadata       Json?
   sentAt         DateTime @default(now())
   /// Drop inbound mail from toEmail for this long after an outbound —
   /// blocks vacation responder loops. Inbox pipeline checks this.
@@ -782,6 +807,7 @@ model TH_TicketEmailOutbound {
 
   @@index([ticketId, sentAt])
   @@index([toEmail, sentAt])
+  @@index([mode, sentAt])
   @@map("th_ticket_email_outbound")
   @@schema("tickethub")
 }
@@ -1104,5 +1130,75 @@ model TH_AmazonPriceCache {
   fetchedAt   DateTime @default(now())
 
   @@map("th_amazon_price_cache")
+  @@schema("tickethub")
+}
+
+// ─── TICKET VIEWS (SAVED FILTERS) ────────────────────────────────────────
+
+enum TH_ViewVisibility {
+  PERSONAL
+  SHARED
+  SYSTEM
+  @@schema("tickethub")
+}
+
+model TH_TicketView {
+  id           String            @id @default(cuid())
+  name         String
+  filters      Json              // { status[], priority[], assigneeId, clientId, type[], tag, q, slaAtRisk, dateField, dateFrom, dateTo }
+  sort         Json?             // { field, direction } — null = default sort
+  visibility   TH_ViewVisibility @default(PERSONAL)
+  icon         String?           // optional emoji or icon name
+  displayOrder Int               @default(0)
+
+  userId    String?
+  user      TH_User?  @relation("TicketViews", fields: [userId], references: [id])
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("th_ticket_views")
+  @@schema("tickethub")
+}
+
+/// Tracks which view each user last selected / set as default.
+model TH_UserViewPreference {
+  id            String @id @default(cuid())
+  userId        String @unique
+  user          TH_User @relation("ViewPreference", fields: [userId], references: [id])
+  defaultViewId String
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  @@map("th_user_view_preferences")
+  @@schema("tickethub")
+}
+
+// ─── CHECKLIST TEMPLATES (SOP) ───────────────────────────────────────────
+
+model TH_ChecklistTemplate {
+  id          String   @id @default(cuid())
+  name        String
+  description String?
+  items       Json     // { id, text, estimatedMinutes, sortOrder }[]
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@map("th_checklist_templates")
+  @@schema("tickethub")
+}
+
+// ─── INVOICE TEMPLATE ────────────────────────────────────────────────────
+
+model TH_InvoiceTemplate {
+  id        String   @id @default(cuid())
+  name      String   @default("Default")
+  config    Json     // InvoiceTemplateConfig — sections, field visibility, colors, fonts
+  logoUrl   String?
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("th_invoice_templates")
   @@schema("tickethub")
 }

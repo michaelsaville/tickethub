@@ -19,8 +19,11 @@ import { TodoistButton } from './TodoistButton'
 import { TagsInput } from './TagsInput'
 import { ConvertToKbButton } from './ConvertToKbButton'
 import { DochubAssetPicker } from './DochubAssetPicker'
+import { AppointmentsCard } from './AppointmentsCard'
 import type { ChecklistItem } from '@/app/lib/actions/checklist'
 import { getMyTimer } from '@/app/lib/actions/timer'
+import { getAppointmentsForTicket } from '@/app/lib/actions/appointments'
+import { isAutomationEnabled } from '@/app/lib/settings'
 
 export const dynamic = 'force-dynamic'
 
@@ -105,18 +108,30 @@ export default async function TicketDetailPage({
   }
 
   const myTimer = await getMyTimer()
-  const [techs, items] = await Promise.all([
-    prisma.tH_User.findMany({
-      where: { isActive: true },
-      orderBy: { name: 'asc' },
-      select: { id: true, name: true },
-    }),
-    prisma.tH_Item.findMany({
-      where: { isActive: true },
-      orderBy: [{ type: 'asc' }, { name: 'asc' }],
-      select: { id: true, name: true, type: true, code: true },
-    }),
-  ])
+  const [techs, onsiteTechs, items, checklistTemplates, appointments, onsiteEnabled] =
+    await Promise.all([
+      prisma.tH_User.findMany({
+        where: { isActive: true },
+        orderBy: { name: 'asc' },
+        select: { id: true, name: true },
+      }),
+      prisma.tH_User.findMany({
+        where: { isActive: true, isOnsiteTech: true },
+        orderBy: { name: 'asc' },
+        select: { id: true, name: true },
+      }),
+      prisma.tH_Item.findMany({
+        where: { isActive: true },
+        orderBy: [{ type: 'asc' }, { name: 'asc' }],
+        select: { id: true, name: true, type: true, code: true },
+      }),
+      prisma.tH_ChecklistTemplate.findMany({
+        orderBy: { name: 'asc' },
+        select: { id: true, name: true },
+      }),
+      getAppointmentsForTicket(id),
+      isAutomationEnabled('onsite_workflow.enabled'),
+    ])
 
   type TimelineEntry =
     | { kind: 'comment'; at: Date; data: (typeof ticket.comments)[number] }
@@ -168,6 +183,7 @@ export default async function TicketDetailPage({
             priority={ticket.priority}
             assignedToId={ticket.assignedToId}
             contractId={ticket.contractId}
+            board={ticket.board}
             type={ticket.type}
             techs={techs}
             contracts={ticket.client.contracts.map((c) => ({
@@ -296,6 +312,24 @@ export default async function TicketDetailPage({
             <PendingCommentList ticketId={ticket.id} />
           </div>
 
+          <AppointmentsCard
+            ticketId={ticket.id}
+            ticketBoard={ticket.board}
+            estimatedMinutes={ticket.estimatedMinutes}
+            techs={onsiteTechs}
+            appointments={appointments.map((a) => ({
+              id: a.id,
+              scheduledStart: a.scheduledStart.toISOString(),
+              scheduledEnd: a.scheduledEnd.toISOString(),
+              status: a.status,
+              confirmationEmailSentAt: a.confirmationEmailSentAt
+                ? a.confirmationEmailSentAt.toISOString()
+                : null,
+              technician: a.technician,
+            }))}
+            onsiteEnabled={onsiteEnabled}
+          />
+
           <ChecklistCard
             ticketId={ticket.id}
             items={items}
@@ -304,6 +338,7 @@ export default async function TicketDetailPage({
                 ? (ticket.checklist as unknown as ChecklistItem[])
                 : []
             }
+            templates={checklistTemplates}
           />
 
           <div id="log-time">

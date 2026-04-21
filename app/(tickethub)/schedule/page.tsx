@@ -6,6 +6,7 @@ import {
   getActiveTechs,
 } from '@/app/lib/actions/appointments'
 import { getAllWorkingHours } from '@/app/lib/actions/working-hours'
+import { isAutomationEnabled } from '@/app/lib/settings'
 import { DispatchBoard } from './DispatchBoard'
 
 export const dynamic = 'force-dynamic'
@@ -31,12 +32,14 @@ export default async function SchedulePage({
   const params = await searchParams
   const weekStart = getWeekStart(params.week)
 
-  const [appointments, unscheduledTickets, techs, workingHours] = await Promise.all([
-    getAppointmentsForWeek(weekStart),
-    getUnscheduledTickets(),
-    getActiveTechs(),
-    getAllWorkingHours(),
-  ])
+  const [appointments, unscheduledTickets, techs, workingHours, onsiteEnabled] =
+    await Promise.all([
+      getAppointmentsForWeek(weekStart),
+      getUnscheduledTickets(),
+      getActiveTechs(),
+      getAllWorkingHours(),
+      isAutomationEnabled('onsite_workflow.enabled'),
+    ])
 
   return (
     <DispatchBoard
@@ -45,6 +48,7 @@ export default async function SchedulePage({
       unscheduledTickets={JSON.parse(JSON.stringify(unscheduledTickets))}
       techs={JSON.parse(JSON.stringify(techs))}
       workingHours={workingHours}
+      onsiteEnabled={onsiteEnabled}
     />
   )
 }

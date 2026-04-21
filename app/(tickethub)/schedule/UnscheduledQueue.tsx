@@ -16,6 +16,7 @@ interface Ticket {
   title: string
   priority: string
   status: string
+  board: string | null
   estimatedMinutes: number | null
   client: { id: string; name: string; shortCode: string | null }
   site: { id: string; name: string } | null
@@ -24,20 +25,27 @@ interface Ticket {
 interface Props {
   tickets: Ticket[]
   onDragStart: (ticket: Ticket) => void
+  /** When true, the queue defaults to the On-Site board only. Any non-empty
+   *  search term bypasses the board filter so you can still pull up a
+   *  ticket on another board by number. */
+  onsiteEnabled: boolean
 }
 
-export function UnscheduledQueue({ tickets, onDragStart }: Props) {
+export function UnscheduledQueue({ tickets, onDragStart, onsiteEnabled }: Props) {
   const [search, setSearch] = useState('')
   const [sortBy, setSortBy] = useState<'priority' | 'sla' | 'created'>('priority')
 
+  const q = search.trim().toLowerCase()
   const filtered = tickets.filter((t) => {
-    if (!search) return true
-    const q = search.toLowerCase()
-    return (
-      t.title.toLowerCase().includes(q) ||
-      t.client.name.toLowerCase().includes(q) ||
-      String(t.ticketNumber).includes(q)
-    )
+    if (q) {
+      return (
+        t.title.toLowerCase().includes(q) ||
+        t.client.name.toLowerCase().includes(q) ||
+        String(t.ticketNumber).includes(q)
+      )
+    }
+    if (onsiteEnabled) return t.board === 'On-Site'
+    return true
   })
 
   function formatDuration(mins: number | null): string {
@@ -54,7 +62,7 @@ export function UnscheduledQueue({ tickets, onDragStart }: Props) {
       <div className="border-b border-th-border px-3 py-3">
         <div className="flex items-center justify-between">
           <h2 className="font-mono text-sm font-medium text-slate-200">
-            Unscheduled
+            {onsiteEnabled && !q ? 'On-Site · Unscheduled' : 'Unscheduled'}
           </h2>
           <span className="rounded-full bg-th-elevated px-2 py-0.5 text-xs font-mono text-slate-400">
             {filtered.length}
@@ -97,6 +105,7 @@ export function UnscheduledQueue({ tickets, onDragStart }: Props) {
             draggable
             onDragStart={(e) => {
               e.dataTransfer.effectAllowed = 'move'
+              e.dataTransfer.setData('ticketId', ticket.id)
               e.dataTransfer.setData('text/plain', ticket.id)
               onDragStart(ticket)
             }}
@@ -112,6 +121,11 @@ export function UnscheduledQueue({ tickets, onDragStart }: Props) {
                   <span className="text-[10px] font-mono text-slate-500">
                     ~{formatDuration(ticket.estimatedMinutes)}
                   </span>
+                  {ticket.board === 'On-Site' && (
+                    <span className="rounded bg-amber-500/20 px-1.5 py-0.5 font-mono text-[9px] uppercase tracking-wider text-amber-300">
+                      On-Site New
+                    </span>
+                  )}
                 </div>
                 <Link
                   href={`/tickets/${ticket.id}`}

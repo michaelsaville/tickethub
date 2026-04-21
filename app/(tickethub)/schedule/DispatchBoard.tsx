@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useCallback, useRef, useMemo } from 'react'
+import { useState, useCallback, useRef, useMemo, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { createAppointment, moveAppointment, resizeAppointment } from '@/app/lib/actions/appointments'
 import type { DaySchedule } from '@/app/lib/actions/working-hours'
@@ -15,6 +15,7 @@ interface Ticket {
   title: string
   priority: string
   status: string
+  board: string | null
   estimatedMinutes: number | null
   client: { id: string; name: string; shortCode: string | null }
   site: { id: string; name: string } | null
@@ -37,12 +38,14 @@ interface Appointment {
   travelMinutes: number | null
   status: string
   notes: string | null
+  confirmationEmailSentAt: string | null
   ticket: {
     id: string
     ticketNumber: number
     title: string
     priority: string
     status: string
+    board: string | null
     client: { id: string; name: string; shortCode: string | null }
     site: { id: string; name: string; address: string | null; city: string | null } | null
   }
@@ -56,6 +59,7 @@ interface Props {
   unscheduledTickets: Ticket[]
   techs: Tech[]
   workingHours: Record<string, DaySchedule[]>
+  onsiteEnabled: boolean
 }
 
 // ─── Constants ───────────────────────────────────────────────────────────
@@ -114,6 +118,13 @@ function isToday(date: Date): boolean {
   return date.toDateString() === now.toDateString()
 }
 
+/** "Michael Saville" → "Michael S.". Single-word names pass through. */
+function displayTechName(full: string): string {
+  const parts = full.trim().split(/\s+/)
+  if (parts.length < 2) return parts[0] ?? full
+  return `${parts[0]} ${parts[parts.length - 1][0]}.`
+}
+
 // ─── Component ───────────────────────────────────────────────────────────
 
 export function DispatchBoard({
@@ -122,12 +133,30 @@ export function DispatchBoard({
   unscheduledTickets,
   techs,
   workingHours,
+  onsiteEnabled,
 }: Props) {
   const router = useRouter()
   const weekStart = useMemo(() => new Date(weekStartStr), [weekStartStr])
   const [dragTicket, setDragTicket] = useState<Ticket | null>(null)
   const [dragOverSlot, setDragOverSlot] = useState<{ dayIdx: number; techId: string; slot: number } | null>(null)
   const gridRef = useRef<HTMLDivElement>(null)
+  const ticketsById = useMemo(() => {
+    const m = new Map<string, Ticket>()
+    for (const t of unscheduledTickets) m.set(t.id, t)
+    return m
+  }, [unscheduledTickets])
+
+  // Clear any stale hover highlight when the browser finishes any drag,
+  // even if it ended outside the grid.
+  useEffect(() => {
+    const clear = () => setDragOverSlot(null)
+    window.addEventListener('dragend', clear)
+    window.addEventListener('drop', clear)
+    return () => {
+      window.removeEventListener('dragend', clear)
+      window.removeEventListener('drop', clear)
+    }
+  }, [])
 
   // ─── Week navigation ────────────────────────────────────────────────
 
@@ -165,26 +194,26 @@ export function DispatchBoard({
   function handleDragOver(e: React.DragEvent, dayIdx: number, techId: string, slot: number) {
     e.preventDefault()
     e.dataTransfer.dropEffect = 'move'
-    setDragOverSlot({ dayIdx, techId, slot })
-  }
-
-  function handleDragLeave() {
-    setDragOverSlot(null)
+    setDragOverSlot((prev) =>
+      prev?.dayIdx === dayIdx && prev.techId === techId && prev.slot === slot
+        ? prev
+        : { dayIdx, techId, slot },
+    )
   }
 
   async function handleDrop(e: React.DragEvent, dayIdx: number, techId: string, slot: number) {
     e.preventDefault()
+    e.stopPropagation()
     setDragOverSlot(null)
 
-    // Check for appointment move (existing appointment drag)
+    const dayDate = addDays(weekStart, dayIdx)
+    const minutes = slotToMinuteOfDay(slot)
+    const start = new Date(dayDate)
+    start.setHours(Math.floor(minutes / 60), minutes % 60, 0, 0)
+
+    // Existing appointment drag → move
     const movedApptId = e.dataTransfer.getData('appointmentId')
     if (movedApptId) {
-      const dayDate = addDays(weekStart, dayIdx)
-      const minutes = slotToMinuteOfDay(slot)
-      const start = new Date(dayDate)
-      start.setHours(Math.floor(minutes / 60), minutes % 60, 0, 0)
-
-      // Find original to preserve duration
       const orig = appointments.find((a) => a.id === movedApptId)
       if (!orig) return
       const durationMs = new Date(orig.scheduledEnd).getTime() - new Date(orig.scheduledStart).getTime()
@@ -199,20 +228,17 @@ export function DispatchBoard({
       return
     }
 
-    // New appointment from queue
-    if (!dragTicket) return
+    // New appointment from the unscheduled queue. Prefer dataTransfer over
+    // React state so drops survive rerenders mid-drag.
+    const droppedTicketId = e.dataTransfer.getData('ticketId') || e.dataTransfer.getData('text/plain')
+    const ticket = (droppedTicketId && ticketsById.get(droppedTicketId)) || dragTicket
+    if (!ticket) return
 
-    const dayDate = addDays(weekStart, dayIdx)
-    const minutes = slotToMinuteOfDay(slot)
-    const start = new Date(dayDate)
-    start.setHours(Math.floor(minutes / 60), minutes % 60, 0, 0)
-
-    // Default duration: estimatedMinutes or 60
-    const durationMin = dragTicket.estimatedMinutes ?? 60
+    const durationMin = ticket.estimatedMinutes ?? 60
     const end = new Date(start.getTime() + durationMin * 60_000)
 
     await createAppointment({
-      ticketId: dragTicket.id,
+      ticketId: ticket.id,
       technicianId: techId,
       scheduledStart: start.toISOString(),
       scheduledEnd: end.toISOString(),
@@ -252,6 +278,7 @@ export function DispatchBoard({
       <UnscheduledQueue
         tickets={unscheduledTickets}
         onDragStart={handleDragStart}
+        onsiteEnabled={onsiteEnabled}
       />
 
       {/* Right panel: dispatch grid */}
@@ -289,9 +316,10 @@ export function DispatchBoard({
         <div ref={gridRef} className="flex-1 overflow-auto">
           <div className="flex min-w-max">
             {/* Time gutter */}
-            <div className="sticky left-0 z-10 w-16 shrink-0 border-r border-th-border bg-th-surface">
-              {/* Spacer for day headers */}
+            <div className="sticky left-0 z-20 w-16 shrink-0 border-r border-th-border bg-th-surface">
+              {/* Spacer matching day header (h-14) + tech sub-header (h-7) */}
               <div className="h-14 border-b border-th-border" />
+              <div className="h-7 border-b border-th-border bg-th-elevated" />
               {Array.from({ length: TOTAL_SLOTS }, (_, slot) => (
                 <div
                   key={slot}
@@ -336,10 +364,13 @@ export function DispatchBoard({
                           className="relative border-r border-th-border/30"
                           style={{ width: 140 }}
                         >
-                          {/* Tech name sub-header */}
-                          <div className="sticky top-[3.5rem] z-10 border-b border-th-border/50 bg-th-surface px-1 py-0.5 text-center">
-                            <span className="text-[10px] font-mono text-slate-400 truncate block">
-                              {tech.name.split(' ')[0]}
+                          {/* Tech name sub-header — sticky below day header */}
+                          <div className="sticky top-[3.5rem] z-[9] flex h-7 items-center justify-center border-b border-th-border bg-th-elevated px-1 text-center">
+                            <span
+                              className="block truncate font-mono text-[11px] font-medium text-slate-200"
+                              title={tech.name}
+                            >
+                              {displayTechName(tech.name)}
                             </span>
                           </div>
 
@@ -365,7 +396,6 @@ export function DispatchBoard({
                                   }`}
                                   style={{ height: SLOT_HEIGHT }}
                                   onDragOver={(e) => handleDragOver(e, dayIdx, tech.id, slot)}
-                                  onDragLeave={handleDragLeave}
                                   onDrop={(e) => handleDrop(e, dayIdx, tech.id, slot)}
                                 />
                               )
@@ -390,6 +420,7 @@ export function DispatchBoard({
                                   slotHeight={SLOT_HEIGHT}
                                   dayDate={dayDate}
                                   onResize={handleResize}
+                                  onsiteEnabled={onsiteEnabled}
                                 />
                               )
                             })}

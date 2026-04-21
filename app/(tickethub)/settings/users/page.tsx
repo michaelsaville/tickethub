@@ -29,6 +29,7 @@ export default async function UsersSettingsPage() {
       role: true,
       hourlyRate: true,
       isActive: true,
+      isOnsiteTech: true,
       createdAt: true,
     },
   })

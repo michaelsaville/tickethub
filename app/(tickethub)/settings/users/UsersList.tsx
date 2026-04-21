@@ -3,6 +3,7 @@
 import { useState, useTransition } from 'react'
 import {
   setUserActive,
+  setUserOnsiteTech,
   updateHourlyRate,
   updateUserRole,
 } from '@/app/lib/actions/users'
@@ -15,6 +16,7 @@ type User = {
   role: string
   hourlyRate: number | null
   isActive: boolean
+  isOnsiteTech: boolean
   createdAt: Date
 }
 
@@ -42,6 +44,7 @@ export function UsersList({
             <th className="px-4 py-2">Email</th>
             <th className="px-4 py-2 w-48">Role</th>
             <th className="px-4 py-2 w-40">Hourly Rate</th>
+            <th className="px-4 py-2 w-32">On-site</th>
             <th className="px-4 py-2 w-32">Status</th>
           </tr>
         </thead>
@@ -58,6 +61,7 @@ export function UsersList({
 function UserRow({ user, isMe }: { user: User; isMe: boolean }) {
   const [role, setRole] = useState(user.role)
   const [active, setActive] = useState(user.isActive)
+  const [onsite, setOnsite] = useState(user.isOnsiteTech)
   const [rate, setRate] = useState<string>(
     user.hourlyRate != null ? formatCents(user.hourlyRate) : '',
   )
@@ -73,6 +77,19 @@ function UserRow({ user, isMe }: { user: User; isMe: boolean }) {
       if (!res.ok) {
         setErr(res.error)
         setRole(prev)
+      }
+    })
+  }
+
+  function handleOnsite(v: boolean) {
+    setErr(null)
+    const prev = onsite
+    setOnsite(v)
+    startTransition(async () => {
+      const res = await setUserOnsiteTech(user.id, v)
+      if (!res.ok) {
+        setErr(res.error)
+        setOnsite(prev)
       }
     })
   }
@@ -140,6 +157,20 @@ function UserRow({ user, isMe }: { user: User; isMe: boolean }) {
           placeholder="$0.00"
           className="th-input text-xs font-mono"
         />
+      </td>
+      <td className="px-4 py-3">
+        <button
+          type="button"
+          onClick={() => handleOnsite(!onsite)}
+          disabled={isPending}
+          className={
+            onsite
+              ? 'th-btn-ghost text-xs text-status-resolved'
+              : 'th-btn-ghost text-xs text-th-text-muted'
+          }
+        >
+          {onsite ? 'Yes' : 'No'}
+        </button>
       </td>
       <td className="px-4 py-3">
         <button

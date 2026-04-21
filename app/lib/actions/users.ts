@@ -66,6 +66,23 @@ export async function setUserActive(
   }
 }
 
+export async function setUserOnsiteTech(
+  userId: string,
+  isOnsiteTech: boolean,
+): Promise<UserActionResult> {
+  const auth = await requireAdmin()
+  if (!auth.ok) return auth
+  try {
+    await prisma.tH_User.update({ where: { id: userId }, data: { isOnsiteTech } })
+    revalidatePath('/settings/users')
+    revalidatePath('/schedule')
+    return { ok: true }
+  } catch (e) {
+    console.error('[actions/users] setOnsiteTech failed', e)
+    return { ok: false, error: 'Failed to update user' }
+  }
+}
+
 export async function updateHourlyRate(
   userId: string,
   rateCents: number | null,

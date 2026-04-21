@@ -93,6 +93,36 @@ export async function getConfig(key: string): Promise<string> {
   return process.env[key] ?? ''
 }
 
+// ─── Automation flags ───────────────────────────────────────────────────
+
+/**
+ * Workflow-automation flags are non-secret booleans stored in the same
+ * TH_Setting table (encrypted — yes, for two bytes, but it keeps the
+ * storage path uniform). Defaults are applied on read.
+ */
+const AUTOMATION_DEFAULTS: Record<string, boolean> = {
+  'onsite_workflow.enabled': true,
+}
+
+export async function isAutomationEnabled(flag: keyof typeof AUTOMATION_DEFAULTS): Promise<boolean> {
+  const raw = await getSetting(flag)
+  if (raw === null) return AUTOMATION_DEFAULTS[flag]
+  return raw === 'true'
+}
+
+export async function setAutomationEnabled(
+  flag: keyof typeof AUTOMATION_DEFAULTS,
+  enabled: boolean,
+): Promise<void> {
+  await setSetting(flag, enabled ? 'true' : 'false')
+}
+
+export type AutomationFlag = keyof typeof AUTOMATION_DEFAULTS
+
+export function listAutomationFlags(): AutomationFlag[] {
+  return Object.keys(AUTOMATION_DEFAULTS) as AutomationFlag[]
+}
+
 // ─── Allowlist ──────────────────────────────────────────────────────────
 
 export const ALLOWED_SETTING_KEYS = [

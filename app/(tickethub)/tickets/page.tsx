@@ -4,18 +4,28 @@ import type { Prisma } from '@prisma/client'
 import { prisma } from '@/app/lib/prisma'
 import { requireAuth } from '@/app/lib/api-auth'
 import { SlaBadge } from '@/app/components/SlaBadge'
-import { TicketFilters } from './TicketFilters'
 import { SwipeTicketRow } from './SwipeTicketRow'
 import { AiSearch } from './AiSearch'
+import { TicketListClient } from './TicketListClient'
+import { getTicketViews } from '@/app/lib/actions/ticket-views'
+import type { ViewFilters, ViewSort } from '@/app/lib/actions/ticket-views'
 
 export const dynamic = 'force-dynamic'
 
 type SearchParams = Promise<{
+  viewId?: string
+  // Legacy view= param for backwards compat
   view?: 'mine' | 'unassigned' | 'sla-risk' | 'recent'
   status?: string
   priority?: string
   assigneeId?: string
+  clientId?: string
+  type?: string
+  tag?: string
   q?: string
+  dateField?: string
+  dateFrom?: string
+  dateTo?: string
 }>
 
 export default async function TicketsPage({
@@ -26,13 +36,61 @@ export default async function TicketsPage({
   const { session, error } = await requireAuth()
   if (error) redirect('/api/auth/signin')
 
+  const userId = session!.user.id
   const sp = await searchParams
-  const where = buildWhere(sp, session!.user.id)
 
-  const [tickets, users] = await Promise.all([
+  // Load views + user preference
+  const { views, defaultViewId } = await getTicketViews()
+
+  // Determine active view
+  let activeViewId = sp.viewId ?? null
+
+  // Legacy view= param: map to system view
+  if (!activeViewId && sp.view) {
+    const legacyMap: Record<string, string> = {
+      mine: 'My Open Tickets',
+      unassigned: 'Unassigned',
+      'sla-risk': 'SLA At Risk',
+      recent: 'Recently Updated',
+    }
+    const name = legacyMap[sp.view]
+    if (name) {
+      const match = views.find((v) => v.visibility === 'SYSTEM' && v.name === name)
+      if (match) activeViewId = match.id
+    }
+  }
+
+  // If no view selected, use default or first system view
+  if (!activeViewId) {
+    activeViewId = defaultViewId ?? views.find((v) => v.visibility === 'SYSTEM')?.id ?? null
+  }
+
+  // Build effective filters: view base + URL overrides
+  const activeView = views.find((v) => v.id === activeViewId)
+  const viewFilters: ViewFilters = activeView
+    ? (activeView.filters as unknown as ViewFilters)
+    : {}
+
+  // Apply URL overrides
+  const effectiveFilters: ViewFilters = { ...viewFilters }
+  if (sp.status) effectiveFilters.status = [sp.status]
+  if (sp.priority) effectiveFilters.priority = [sp.priority]
+  if (sp.assigneeId) effectiveFilters.assigneeId = sp.assigneeId
+  if (sp.clientId) effectiveFilters.clientId = sp.clientId
+  if (sp.type) effectiveFilters.type = [sp.type]
+  if (sp.tag) effectiveFilters.tag = sp.tag
+  if (sp.q) effectiveFilters.q = sp.q
+  if (sp.dateField) effectiveFilters.dateField = sp.dateField as ViewFilters['dateField']
+  if (sp.dateFrom) effectiveFilters.dateFrom = sp.dateFrom
+  if (sp.dateTo) effectiveFilters.dateTo = sp.dateTo
+
+  // Build Prisma where from effective filters
+  const { where, orderBy } = buildQuery(effectiveFilters, activeView?.sort as ViewSort | null, userId)
+
+  const [tickets, users, clients] = await Promise.all([
     prisma.tH_Ticket.findMany({
       where,
-      orderBy: [{ priority: 'asc' }, { updatedAt: 'desc' }],
+      orderBy,
       take: 200,
       select: {
         id: true,
@@ -40,6 +98,7 @@ export default async function TicketsPage({
         title: true,
         status: true,
         priority: true,
+        type: true,
         isUnread: true,
         updatedAt: true,
         createdAt: true,
@@ -55,22 +114,18 @@ export default async function TicketsPage({
       select: { id: true, name: true },
       orderBy: { name: 'asc' },
     }),
+    prisma.tH_Client.findMany({
+      where: { isActive: true },
+      select: { id: true, name: true, shortCode: true },
+      orderBy: { name: 'asc' },
+    }),
   ])
 
-  const title =
-    sp.view === 'mine'
-      ? 'My Queue'
-      : sp.view === 'unassigned'
-        ? 'Unassigned'
-        : sp.view === 'sla-risk'
-          ? 'SLA At Risk'
-          : sp.view === 'recent'
-            ? 'Recently Updated'
-            : 'All Tickets'
+  const title = activeView?.name ?? 'All Tickets'
 
   return (
     <div className="p-6">
-      <header className="mb-6 flex items-center justify-between gap-4">
+      <header className="mb-4 flex items-center justify-between gap-4">
         <div>
           <h1 className="font-mono text-2xl text-slate-100">{title}</h1>
           <p className="mt-1 text-sm text-th-text-secondary">
@@ -82,8 +137,15 @@ export default async function TicketsPage({
         </Link>
       </header>
 
-      <div className="flex items-center gap-2">
-        <TicketFilters users={users} currentUserId={session!.user.id} />
+      <div className="space-y-3">
+        <TicketListClient
+          views={views}
+          defaultViewId={defaultViewId}
+          activeViewId={activeViewId}
+          users={users}
+          clients={clients}
+          currentUserId={userId}
+        />
         <AiSearch />
       </div>
 
@@ -196,57 +258,117 @@ export default async function TicketsPage({
   )
 }
 
-function buildWhere(
-  sp: Awaited<SearchParams>,
+// ─── Query builder from ViewFilters ──────────────────────────────────────
+
+function buildQuery(
+  filters: ViewFilters,
+  sort: ViewSort | null,
   userId: string,
-): Prisma.TH_TicketWhereInput {
+): {
+  where: Prisma.TH_TicketWhereInput
+  orderBy: Prisma.TH_TicketOrderByWithRelationInput[]
+} {
   const where: Prisma.TH_TicketWhereInput = { deletedAt: null }
 
-  if (sp.view === 'mine') {
-    where.assignedToId = userId
-    where.status = { notIn: ['CLOSED', 'CANCELLED'] }
-  } else if (sp.view === 'unassigned') {
-    where.assignedToId = null
-    where.status = { notIn: ['CLOSED', 'CANCELLED', 'RESOLVED'] }
-  } else if (sp.view === 'sla-risk') {
-    where.status = { notIn: ['CLOSED', 'CANCELLED', 'RESOLVED'] }
+  // Status
+  if (filters.status?.length) {
+    if (filters.status.length === 1) {
+      where.status = filters.status[0] as any
+    } else {
+      where.status = { in: filters.status as any }
+    }
+  }
+
+  // Priority
+  if (filters.priority?.length) {
+    if (filters.priority.length === 1) {
+      where.priority = filters.priority[0] as any
+    } else {
+      where.priority = { in: filters.priority as any }
+    }
+  }
+
+  // Assignee
+  if (filters.assigneeId) {
+    if (filters.assigneeId === '__me__') {
+      where.assignedToId = userId
+    } else if (filters.assigneeId === 'none') {
+      where.assignedToId = null
+    } else {
+      where.assignedToId = filters.assigneeId
+    }
+  }
+
+  // Client
+  if (filters.clientId) {
+    where.clientId = filters.clientId
+  }
+
+  // Type
+  if (filters.type?.length) {
+    if (filters.type.length === 1) {
+      where.type = filters.type[0] as any
+    } else {
+      where.type = { in: filters.type as any }
+    }
+  }
+
+  // Tag
+  if (filters.tag) {
+    where.tags = { some: { tag: { equals: filters.tag, mode: 'insensitive' } } }
+  }
+
+  // Text search
+  if (filters.q) {
+    where.OR = [
+      { title: { contains: filters.q, mode: 'insensitive' } },
+      { description: { contains: filters.q, mode: 'insensitive' } },
+    ]
+  }
+
+  // SLA at risk
+  if (filters.slaAtRisk) {
     where.slaResolveDue = { not: null }
     where.slaPausedAt = null
-    // Server-side we approximate "at risk" as breached OR due within 24hr.
-    // Exact 50%/90% thresholds are re-evaluated per-row in the view.
-    where.OR = [
-      { slaBreached: true },
-      { slaResolveDue: { lte: new Date(Date.now() + 24 * 60 * 60 * 1000) } },
-    ]
-  } else if (sp.view === 'recent') {
-    const twoDaysAgo = new Date(Date.now() - 48 * 60 * 60 * 1000)
-    where.updatedAt = { gte: twoDaysAgo }
-  } else {
-    // Default: hide closed/cancelled unless explicitly filtered
-    if (!sp.status) where.status = { notIn: ['CLOSED', 'CANCELLED'] }
-  }
-
-  if (sp.status) {
-    where.status = sp.status as Prisma.TH_TicketWhereInput['status']
-  }
-  if (sp.priority) {
-    where.priority = sp.priority as Prisma.TH_TicketWhereInput['priority']
-  }
-  if (sp.assigneeId) {
-    where.assignedToId = sp.assigneeId === 'none' ? null : sp.assigneeId
-  }
-  if (sp.q) {
-    where.OR = [
-      { title: { contains: sp.q, mode: 'insensitive' } },
-      { description: { contains: sp.q, mode: 'insensitive' } },
+    where.AND = [
+      {
+        OR: [
+          { slaBreached: true },
+          { slaResolveDue: { lte: new Date(Date.now() + 24 * 60 * 60 * 1000) } },
+        ],
+      },
     ]
   }
-  if (sp.tag) {
-    where.tags = { some: { tag: sp.tag } }
+
+  // Date range
+  if (filters.dateField && (filters.dateFrom || filters.dateTo)) {
+    const dateWhere: any = {}
+    if (filters.dateFrom) dateWhere.gte = new Date(filters.dateFrom)
+    if (filters.dateTo) {
+      const to = new Date(filters.dateTo)
+      to.setHours(23, 59, 59, 999)
+      dateWhere.lte = to
+    }
+    ;(where as any)[filters.dateField] = dateWhere
   }
 
-  return where
+  // Sort
+  const orderBy: Prisma.TH_TicketOrderByWithRelationInput[] = []
+  if (sort?.field) {
+    orderBy.push({ [sort.field]: sort.direction })
+  }
+  // Always add secondary sort
+  if (!sort || sort.field !== 'priority') {
+    orderBy.push({ priority: 'asc' })
+  }
+  if (!sort || sort.field !== 'updatedAt') {
+    orderBy.push({ updatedAt: 'desc' })
+  }
+
+  return { where, orderBy }
 }
+
+// ─── Helpers ─────────────────────────────────────────────────────────────
 
 function statusBadgeClass(status: string): string {
   return `badge-status-${status.toLowerCase().replace(/_/g, '-')}`

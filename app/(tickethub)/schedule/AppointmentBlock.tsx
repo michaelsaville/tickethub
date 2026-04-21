@@ -8,6 +8,7 @@ import {
   cancelAppointment,
   completeAndCharge,
   addTechToAppointment,
+  sendOnsiteConfirmationEmail,
 } from '@/app/lib/actions/appointments'
 
 const PRIORITY_COLORS: Record<string, string> = {
@@ -36,12 +37,14 @@ interface Appointment {
   travelMinutes: number | null
   status: string
   notes: string | null
+  confirmationEmailSentAt: string | null
   ticket: {
     id: string
     ticketNumber: number
     title: string
     priority: string
     status: string
+    board: string | null
     client: { id: string; name: string; shortCode: string | null }
     site: { id: string; name: string; address: string | null; city: string | null } | null
   }
@@ -56,16 +59,22 @@ interface Props {
   slotHeight: number
   dayDate: Date
   onResize: (appointmentId: string, newEndIso: string) => Promise<void>
+  onsiteEnabled: boolean
 }
 
-export function AppointmentBlock({ appointment, top, height, slotHeight, dayDate, onResize }: Props) {
+export function AppointmentBlock({ appointment, top, height, slotHeight, dayDate, onResize, onsiteEnabled }: Props) {
   const router = useRouter()
   const [showPopover, setShowPopover] = useState(false)
   const [isResizing, setIsResizing] = useState(false)
   const [currentHeight, setCurrentHeight] = useState(height)
+  const [emailStatus, setEmailStatus] = useState<'idle' | 'sending' | 'sent' | 'error'>(
+    appointment.confirmationEmailSentAt ? 'sent' : 'idle',
+  )
+  const [emailError, setEmailError] = useState<string | null>(null)
   const blockRef = useRef<HTMLDivElement>(null)
   const resizeStartY = useRef(0)
   const resizeStartHeight = useRef(0)
+  const latestHeight = useRef(height)
 
   const isComplete = appointment.status === 'COMPLETE'
   const isCancelled = appointment.status === 'CANCELLED'
@@ -90,11 +99,13 @@ export function AppointmentBlock({ appointment, top, height, slotHeight, dayDate
     setIsResizing(true)
     resizeStartY.current = e.clientY
     resizeStartHeight.current = currentHeight
+    latestHeight.current = currentHeight
 
     const onMove = (ev: PointerEvent) => {
       const delta = ev.clientY - resizeStartY.current
       const snapped = Math.round(delta / slotHeight) * slotHeight
       const newH = Math.max(slotHeight, resizeStartHeight.current + snapped)
+      latestHeight.current = newH
       setCurrentHeight(newH)
     }
 
@@ -103,8 +114,9 @@ export function AppointmentBlock({ appointment, top, height, slotHeight, dayDate
       document.removeEventListener('pointerup', onUp)
       setIsResizing(false)
 
-      // Calculate new end time
-      const slotsFromTop = Math.round(currentHeight / slotHeight)
+      // Calculate new end time — read from ref so we see the final height
+      // even though `currentHeight` in this closure is stale.
+      const slotsFromTop = Math.round(latestHeight.current / slotHeight)
       const startMinute = new Date(appointment.scheduledStart).getHours() * 60 +
         new Date(appointment.scheduledStart).getMinutes()
       const endMinute = startMinute + slotsFromTop * 15
@@ -131,6 +143,32 @@ export function AppointmentBlock({ appointment, top, height, slotHeight, dayDate
     }
     setShowPopover(false)
     router.refresh()
+  }
+
+  // ─── On-site confirmation email ─────────────────────────────────────
+
+  const isOnsite =
+    onsiteEnabled && appointment.ticket.board === 'On-Site' && !isDone
+
+  async function handleSendConfirmation(e: React.MouseEvent) {
+    e.stopPropagation()
+    if (emailStatus === 'sending') return
+    if (
+      emailStatus === 'sent' &&
+      !confirm('Confirmation was already sent. Send again?')
+    ) {
+      return
+    }
+    setEmailStatus('sending')
+    setEmailError(null)
+    const res = await sendOnsiteConfirmationEmail(appointment.id)
+    if (res.ok) {
+      setEmailStatus('sent')
+      router.refresh()
+    } else {
+      setEmailStatus('error')
+      setEmailError(res.error)
+    }
   }
 
   // ─── Time format ────────────────────────────────────────────────────
@@ -182,6 +220,36 @@ export function AppointmentBlock({ appointment, top, height, slotHeight, dayDate
           <div className="text-white/60">
             {formatTime(appointment.scheduledStart)} – {formatTime(appointment.scheduledEnd)}
           </div>
+        )}
+
+        {/* On-site confirmation email icon (bottom-right of the block) */}
+        {isOnsite && (
+          <button
+            type="button"
+            onClick={handleSendConfirmation}
+            title={
+              emailStatus === 'sent'
+                ? `Confirmation emailed ${
+                    appointment.confirmationEmailSentAt
+                      ? new Date(appointment.confirmationEmailSentAt).toLocaleString()
+                      : ''
+                  }`
+                : emailStatus === 'error'
+                  ? `Failed: ${emailError ?? 'unknown error'} — click to retry`
+                  : emailStatus === 'sending'
+                    ? 'Sending…'
+                    : 'Email on-site confirmation to client'
+            }
+            className={`absolute bottom-0.5 right-0.5 z-10 flex h-4 w-4 items-center justify-center rounded text-[9px] leading-none ${
+              emailStatus === 'sent'
+                ? 'bg-emerald-600/80 text-white'
+                : emailStatus === 'error'
+                  ? 'bg-red-600/80 text-white hover:bg-red-500'
+                  : 'bg-black/30 text-white/90 hover:bg-black/60'
+            }`}
+          >
+            {emailStatus === 'sent' ? '✓' : emailStatus === 'sending' ? '…' : '✉'}
+          </button>
         )}
 
         {/* Resize handle */}

@@ -9,23 +9,37 @@ import {
   toggleChecklistItem,
   type ChecklistItem,
 } from '@/app/lib/actions/checklist'
+import { applyChecklistTemplate } from '@/app/lib/actions/checklist-templates'
 
 type Item = Pick<TH_Item, 'id' | 'name' | 'type' | 'code'>
+type TemplatePick = { id: string; name: string }
 
 export function ChecklistCard({
   ticketId,
   items,
   initial,
+  templates,
 }: {
   ticketId: string
   items: Item[]
   initial: ChecklistItem[]
+  templates: TemplatePick[]
 }) {
   const [newText, setNewText] = useState('')
   const [newMinutes, setNewMinutes] = useState('')
   const [err, setErr] = useState<string | null>(null)
   const [isPending, startTransition] = useTransition()
   const [convertTarget, setConvertTarget] = useState<ChecklistItem | null>(null)
+  const [showTemplates, setShowTemplates] = useState(false)
+
+  function applyTemplate(templateId: string) {
+    setErr(null)
+    setShowTemplates(false)
+    startTransition(async () => {
+      const res = await applyChecklistTemplate(ticketId, templateId)
+      if (!res.ok) setErr(res.error)
+    })
+  }
 
   function add() {
     if (!newText.trim()) return
@@ -164,6 +178,35 @@ export function ChecklistCard({
         >
           Add
         </button>
+        <div className="relative">
+          <button
+            type="button"
+            onClick={() => setShowTemplates(!showTemplates)}
+            disabled={isPending || templates.length === 0}
+            className="th-btn-ghost text-xs"
+            title={
+              templates.length === 0
+                ? 'Create templates in Settings → Checklist Templates'
+                : 'Apply a checklist template'
+            }
+          >
+            Template
+          </button>
+          {showTemplates && templates.length > 0 && (
+            <div className="absolute right-0 top-full z-20 mt-1 w-56 rounded-lg border border-th-border bg-th-surface shadow-lg">
+              {templates.map((t) => (
+                <button
+                  key={t.id}
+                  type="button"
+                  onClick={() => applyTemplate(t.id)}
+                  className="block w-full px-3 py-2 text-left text-xs text-slate-100 hover:bg-th-elevated first:rounded-t-lg last:rounded-b-lg"
+                >
+                  {t.name}
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
       </div>
       {err && (
         <div className="mt-2 rounded-md border border-priority-urgent/40 bg-priority-urgent/10 px-3 py-1.5 text-xs text-priority-urgent">

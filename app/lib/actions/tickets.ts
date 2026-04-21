@@ -288,6 +288,44 @@ export async function updateTicketContract(
   }
 }
 
+export async function updateTicketBoard(
+  ticketId: string,
+  board: string | null,
+): Promise<{ ok: boolean; error?: string }> {
+  const userId = await getUserId()
+  if (!userId) return { ok: false, error: 'Unauthorized' }
+  try {
+    const current = await prisma.tH_Ticket.findUnique({
+      where: { id: ticketId },
+      select: { board: true },
+    })
+    if (!current) return { ok: false, error: 'Not found' }
+    const next = board && board.trim() ? board.trim() : null
+    if (current.board === next) return { ok: true }
+    await prisma.$transaction([
+      prisma.tH_Ticket.update({
+        where: { id: ticketId },
+        data: { board: next },
+      }),
+      prisma.tH_TicketEvent.create({
+        data: {
+          ticketId,
+          userId,
+          type: 'BOARD_CHANGE',
+          data: { from: current.board, to: next },
+        },
+      }),
+    ])
+    revalidatePath(`/tickets/${ticketId}`)
+    revalidatePath('/tickets')
+    revalidatePath('/schedule')
+    return { ok: true }
+  } catch (e) {
+    console.error('[actions/tickets] updateBoard failed', e)
+    return { ok: false, error: 'Failed to update board' }
+  }
+}
+
 export async function updateTicketPriority(
   ticketId: string,
   priority: TH_TicketPriority,
