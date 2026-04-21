@@ -7,6 +7,8 @@ import {
   migrateContacts,
   migrateSites,
   migrateTickets,
+  migrateEstimates,
+  migrateInvoices,
   runFullMigration,
 } from '@/app/lib/syncro-migrate'
 
@@ -19,16 +21,18 @@ export async function GET() {
   const { error } = await requireAuth('GLOBAL_ADMIN')
   if (error) return error
 
-  const [clients, contacts, sites, tickets] = await Promise.all([
+  const [clients, contacts, sites, tickets, estimates, invoices] = await Promise.all([
     prisma.tH_Client.count({ where: { syncroId: { not: null } } }),
     prisma.tH_Contact.count({ where: { syncroContactId: { not: null } } }),
     prisma.tH_Site.count({ where: { syncroSiteId: { not: null } } }),
     prisma.tH_Ticket.count({ where: { syncroId: { not: null } } }),
+    prisma.tH_Estimate.count({ where: { externalRef: { startsWith: 'syncro:' } } }),
+    prisma.tH_Invoice.count({ where: { externalRef: { startsWith: 'syncro:' } } }),
   ])
 
   return NextResponse.json({
     configured: syncroConfigured(),
-    stats: { clients, contacts, sites, tickets },
+    stats: { clients, contacts, sites, tickets, estimates, invoices },
   })
 }
 
@@ -72,6 +76,12 @@ export async function POST(req: Request) {
         break
       case 'tickets':
         result = await migrateTickets()
+        break
+      case 'estimates':
+        result = await migrateEstimates()
+        break
+      case 'invoices':
+        result = await migrateInvoices()
         break
       default:
         return NextResponse.json({ error: `Unknown scope: ${scope}` }, { status: 400 })

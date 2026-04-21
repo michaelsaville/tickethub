@@ -21,6 +21,8 @@ export interface FullMigrationResult {
   contacts: MigrationResult
   sites: MigrationResult
   tickets: MigrationResult
+  estimates: MigrationResult
+  invoices: MigrationResult
 }
 
 // ── Status / Priority / Type mappings ─────────────────────────────────────
@@ -382,6 +384,253 @@ export async function migrateTickets(): Promise<MigrationResult> {
   return result
 }
 
+// ── Estimates ──────────────────────────────────────────────────────────────
+
+/** Parse "123.45" → 12345 (cents). NaN-safe (returns 0). */
+function toCents(raw: string | number | null | undefined): number {
+  if (raw == null) return 0
+  const n = typeof raw === 'number' ? raw : parseFloat(raw)
+  if (!Number.isFinite(n)) return 0
+  return Math.round(n * 100)
+}
+
+/** Parse Syncro's numeric "number" field ("1044") → 1044. Returns null for non-integer. */
+function parseEstimateOrInvoiceNumber(raw: string | null | undefined): number | null {
+  if (!raw) return null
+  const n = parseInt(String(raw).replace(/\D/g, ''), 10)
+  return Number.isFinite(n) && n > 0 ? n : null
+}
+
+/**
+ * Syncro estimate statuses seen in the wild: Fresh, Sent, Approved, Declined.
+ * "Fresh" (unsent draft in our mental model) still comes through as actionable
+ * on the portal once the client sees it; mapping to SENT is correct for any
+ * non-draft historical state. Declined/Approved pass through directly.
+ */
+function mapEstimateStatus(raw: string | null | undefined): 'SENT' | 'APPROVED' | 'DECLINED' | 'EXPIRED' | 'CONVERTED' {
+  switch ((raw ?? '').toLowerCase()) {
+    case 'approved': return 'APPROVED'
+    case 'declined': return 'DECLINED'
+    case 'expired':  return 'EXPIRED'
+    case 'converted': return 'CONVERTED'
+    default: return 'SENT'
+  }
+}
+
+/**
+ * Bump a Postgres serial sequence so the next nextval() returns
+ * MAX(column) + 1. No-op when the table is empty (MAX returns NULL
+ * and pg_get_serial_sequence stays at its bootstrap value of 1).
+ *
+ * Called after estimate + invoice import so the next estimate/invoice
+ * created the natural way continues Syncro's numbering instead of
+ * colliding with an imported row.
+ */
+async function bumpSerialSequence(table: string, column: string): Promise<number | null> {
+  const rows = await prisma.$queryRawUnsafe<{ next: bigint | null }[]>(
+    `SELECT setval(
+       pg_get_serial_sequence('${table}', '${column}'),
+       COALESCE((SELECT MAX("${column}") FROM ${table}), 1),
+       (SELECT MAX("${column}") IS NOT NULL FROM ${table})
+     ) AS next`,
+  )
+  const n = rows[0]?.next
+  return typeof n === 'bigint' ? Number(n) : n ?? null
+}
+
+export async function migrateEstimates(): Promise<MigrationResult> {
+  if (!syncroConfigured()) throw new Error('Syncro not configured')
+
+  const result: MigrationResult = { imported: 0, skipped: 0, errors: [] }
+
+  const clients = await prisma.tH_Client.findMany({
+    where: { syncroId: { not: null } },
+    select: { id: true, syncroId: true },
+  })
+  const clientMap = new Map(clients.map(c => [c.syncroId!, c.id]))
+
+  // Up to 200 pages at 100/page = 20_000 estimates. Syncro's estimates
+  // endpoint returns all statuses when no filter is passed.
+  const estimates = await fetchAllPages('/estimates', 100, 200)
+
+  for (const e of estimates) {
+    try {
+      const clientId = clientMap.get(e.customer_id)
+      if (!clientId) {
+        result.skipped++
+        continue
+      }
+
+      // Syncro's `number` is a short decimal string; preserving it as
+      // TH's estimateNumber is the whole point per user instruction.
+      const estimateNumber = parseEstimateOrInvoiceNumber(e.number)
+      if (estimateNumber == null) {
+        result.skipped++
+        continue
+      }
+
+      // Dedup: either externalRef OR estimateNumber collision (run twice
+      // safely). externalRef is the source-of-truth for Syncro imports.
+      const existing = await prisma.tH_Estimate.findFirst({
+        where: {
+          OR: [
+            { externalRef: `syncro:${e.id}` },
+            { estimateNumber },
+          ],
+        },
+        select: { id: true },
+      })
+      if (existing) {
+        result.skipped++
+        continue
+      }
+
+      const subtotal = toCents(e.subtotal)
+      const tax      = toCents(e.tax)
+      const total    = toCents(e.total)
+      const status   = mapEstimateStatus(e.status)
+      const createdAt = e.created_at ? new Date(e.created_at) : new Date()
+      const sentAt = status !== 'SENT'
+        ? createdAt
+        : e.created_at ? new Date(e.created_at) : null
+
+      await prisma.tH_Estimate.create({
+        data: {
+          estimateNumber,
+          clientId,
+          status,
+          title: e.name?.trim() || `Estimate #${e.number}`,
+          subtotal,
+          taxableSubtotal: subtotal,
+          taxAmount: tax,
+          totalAmount: total,
+          sentAt,
+          approvedAt: status === 'APPROVED' ? (e.updated_at ? new Date(e.updated_at) : createdAt) : null,
+          declinedAt: status === 'DECLINED' ? (e.updated_at ? new Date(e.updated_at) : createdAt) : null,
+          convertedAt: status === 'CONVERTED' ? (e.updated_at ? new Date(e.updated_at) : createdAt) : null,
+          externalRef: `syncro:${e.id}`,
+          createdAt,
+        },
+      })
+
+      result.imported++
+    } catch (err: any) {
+      result.errors.push(`Estimate ${e.id}: ${err.message}`)
+    }
+  }
+
+  // Bump the sequence so the next natural-path estimate gets a number
+  // above whatever Syncro's max was. No-op if we imported nothing.
+  try {
+    await bumpSerialSequence('tickethub.th_estimates', 'estimateNumber')
+  } catch (err: any) {
+    result.errors.push(`Sequence bump failed: ${err.message}`)
+  }
+
+  return result
+}
+
+// ── Invoices ───────────────────────────────────────────────────────────────
+
+/**
+ * Syncro invoices carry `is_paid` (and `verified_paid`) — when true,
+ * map to PAID. Unpaid invoices with a past due_date could become
+ * OVERDUE, but the portal derives "past due" visually from dueDate
+ * regardless of stored status, so we leave SENT/PAID as the only
+ * imported terminal states and trust downstream rendering to flag
+ * overdue.
+ */
+function mapInvoiceStatus(inv: {
+  is_paid?: boolean
+  verified_paid?: boolean
+  tech_marked_paid?: boolean
+}): 'SENT' | 'PAID' | 'VOID' {
+  if (inv.is_paid || inv.verified_paid || inv.tech_marked_paid) return 'PAID'
+  return 'SENT'
+}
+
+export async function migrateInvoices(): Promise<MigrationResult> {
+  if (!syncroConfigured()) throw new Error('Syncro not configured')
+
+  const result: MigrationResult = { imported: 0, skipped: 0, errors: [] }
+
+  const clients = await prisma.tH_Client.findMany({
+    where: { syncroId: { not: null } },
+    select: { id: true, syncroId: true },
+  })
+  const clientMap = new Map(clients.map(c => [c.syncroId!, c.id]))
+
+  const invoices = await fetchAllPages('/invoices', 100, 300)
+
+  for (const inv of invoices) {
+    try {
+      const clientId = clientMap.get(inv.customer_id)
+      if (!clientId) {
+        result.skipped++
+        continue
+      }
+
+      const invoiceNumber = parseEstimateOrInvoiceNumber(inv.number)
+      if (invoiceNumber == null) {
+        result.skipped++
+        continue
+      }
+
+      const existing = await prisma.tH_Invoice.findFirst({
+        where: {
+          OR: [
+            { externalRef: `syncro:${inv.id}` },
+            { invoiceNumber },
+          ],
+        },
+        select: { id: true },
+      })
+      if (existing) {
+        result.skipped++
+        continue
+      }
+
+      const subtotal = toCents(inv.subtotal)
+      const tax      = toCents(inv.tax)
+      const total    = toCents(inv.total)
+      const status   = mapInvoiceStatus(inv)
+      const issueDate = inv.date ? new Date(inv.date) : new Date()
+      const dueDate   = inv.due_date ? new Date(inv.due_date) : null
+      const paidAt    = status === 'PAID' ? (inv.updated_at ? new Date(inv.updated_at) : new Date()) : null
+
+      await prisma.tH_Invoice.create({
+        data: {
+          invoiceNumber,
+          clientId,
+          status,
+          issueDate,
+          dueDate,
+          subtotal,
+          taxableSubtotal: subtotal,
+          taxAmount: tax,
+          totalAmount: total,
+          sentAt: issueDate,
+          paidAt,
+          externalRef: `syncro:${inv.id}`,
+          createdAt: inv.created_at ? new Date(inv.created_at) : issueDate,
+        },
+      })
+
+      result.imported++
+    } catch (err: any) {
+      result.errors.push(`Invoice ${inv.id}: ${err.message}`)
+    }
+  }
+
+  try {
+    await bumpSerialSequence('tickethub.th_invoices', 'invoiceNumber')
+  } catch (err: any) {
+    result.errors.push(`Sequence bump failed: ${err.message}`)
+  }
+
+  return result
+}
+
 // ── Full Migration ────────────────────────────────────────────────────────
 
 export async function runFullMigration(
@@ -405,5 +654,13 @@ export async function runFullMigration(
   const tickets = await migrateTickets()
   log(`Tickets done: ${tickets.imported} imported, ${tickets.skipped} skipped`)
 
-  return { customers, contacts, sites, tickets }
+  log('Starting estimate migration...')
+  const estimates = await migrateEstimates()
+  log(`Estimates done: ${estimates.imported} imported, ${estimates.skipped} skipped`)
+
+  log('Starting invoice migration...')
+  const invoices = await migrateInvoices()
+  log(`Invoices done: ${invoices.imported} imported, ${invoices.skipped} skipped`)
+
+  return { customers, contacts, sites, tickets, estimates, invoices }
 }
