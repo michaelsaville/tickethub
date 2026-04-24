@@ -30,6 +30,8 @@ export interface CreateTicketCoreInput {
    *  too (the client JUST emailed us — they expect a confirmation) but
    *  the loop-guard prevents their autoresponder from bouncing back. */
   sendClientEmail?: boolean
+  /** Tag ticket as spawned from a recurring template (for badge + audit). */
+  recurringTemplateId?: string | null
 }
 
 /**
@@ -54,6 +56,7 @@ export async function createTicketCore(
     explicitContractId = null,
     createdById,
     sendClientEmail = true,
+    recurringTemplateId = null,
   } = input
 
   if (!clientId) return { ok: false, error: 'Client is required' }
@@ -92,14 +95,15 @@ export async function createTicketCore(
           status: assignedToId ? 'OPEN' : 'NEW',
           slaResponseDue,
           slaResolveDue,
+          recurringTemplateId,
         },
       })
       await tx.tH_TicketEvent.create({
         data: {
           ticketId: t.id,
           userId: createdById,
-          type: 'CREATED',
-          data: { priority, type },
+          type: recurringTemplateId ? 'CREATED_BY_RECURRING' : 'CREATED',
+          data: { priority, type, ...(recurringTemplateId ? { recurringTemplateId } : {}) },
         },
       })
       if (assignedToId) {

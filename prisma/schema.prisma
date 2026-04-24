@@ -49,6 +49,7 @@ model TH_Client {
   assets    TH_Asset[]
   invoices  TH_Invoice[]
   estimates TH_Estimate[]
+  recurringTicketTemplates TH_RecurringTicketTemplate[]
 
   @@map("th_clients")
   @@schema("tickethub")
@@ -73,6 +74,7 @@ model TH_Contact {
   reminders     TH_Reminder[]
   portalTokens  TH_ContactPortalToken[]
   estimates     TH_Estimate[]
+  recurringTicketTemplates TH_RecurringTicketTemplate[]
 
   @@map("th_contacts")
   @@schema("tickethub")
@@ -97,6 +99,7 @@ model TH_Site {
 
   tickets        TH_Ticket[]
   stoppingPoints TH_StoppingPoint[]
+  recurringTicketTemplates TH_RecurringTicketTemplate[]
 
   @@map("th_sites")
   @@schema("tickethub")
@@ -142,6 +145,7 @@ model TH_Contract {
   charges         TH_Charge[]
   tickets         TH_Ticket[]
   estimates       TH_Estimate[]
+  recurringTicketTemplates TH_RecurringTicketTemplate[]
 
   @@map("th_contracts")
   @@schema("tickethub")
@@ -335,6 +339,12 @@ model TH_Ticket {
   createdAt DateTime  @default(now())
   updatedAt DateTime  @updatedAt
 
+  /// Recurring-ticket template this ticket was spawned from (if any).
+  /// Occurrences are independent — they never block or skip based on
+  /// each other's status.
+  recurringTemplateId String?
+  recurringTemplate   TH_RecurringTicketTemplate? @relation(fields: [recurringTemplateId], references: [id])
+
   comments     TH_TicketComment[]
   charges      TH_Charge[]
   attachments  TH_Attachment[]
@@ -344,6 +354,7 @@ model TH_Ticket {
   tags         TH_TicketTag[]
   appointments TH_Appointment[]
 
+  @@index([recurringTemplateId, createdAt])
   @@map("th_tickets")
   @@schema("tickethub")
 }
@@ -729,6 +740,8 @@ model TH_User {
   remindersCreated TH_Reminder[]       @relation("ReminderCreator")
   ticketViews      TH_TicketView[]     @relation("TicketViews")
   viewPreference   TH_UserViewPreference? @relation("ViewPreference")
+  recurringTicketTemplates        TH_RecurringTicketTemplate[] @relation("RecurringTemplateCreator")
+  recurringTicketTemplatesAssigned TH_RecurringTicketTemplate[] @relation("RecurringTemplateAssignee")
 
   @@map("th_users")
   @@schema("tickethub")
@@ -1194,6 +1207,69 @@ model TH_ChecklistTemplate {
   updatedAt   DateTime @updatedAt
 
   @@map("th_checklist_templates")
+  @@schema("tickethub")
+}
+
+// ─── RECURRING TICKETS ────────────────────────────────────────────────────
+
+enum TH_RecurringFrequency {
+  DAILY
+  WEEKLY
+  MONTHLY
+  @@schema("tickethub")
+}
+
+model TH_RecurringTicketTemplate {
+  id          String @id @default(cuid())
+  name        String
+
+  // What ticket to create
+  clientId    String
+  client      TH_Client     @relation(fields: [clientId], references: [id])
+  siteId      String?
+  site        TH_Site?      @relation(fields: [siteId], references: [id])
+  contactId   String?
+  contact     TH_Contact?   @relation(fields: [contactId], references: [id])
+  contractId  String?
+  contract    TH_Contract?  @relation(fields: [contractId], references: [id])
+  assignedToId String?
+  assignedTo   TH_User?     @relation("RecurringTemplateAssignee", fields: [assignedToId], references: [id])
+
+  title        String
+  description  String?
+  priority     TH_TicketPriority @default(MEDIUM)
+  type         TH_TicketType     @default(SERVICE_REQUEST)
+
+  // Schedule
+  frequency    TH_RecurringFrequency
+  /// Every N units (days/weeks/months). 1 = every period.
+  interval     Int @default(1)
+  /// 0=Sunday..6=Saturday (WEEKLY only).
+  dayOfWeek    Int?
+  /// 1..31 (MONTHLY only). If > days in month, clamped to last day.
+  dayOfMonth   Int?
+  /// 0..23 — fire hour in template timezone.
+  hourOfDay    Int @default(8)
+  /// 0..59 — fire minute in template timezone.
+  minuteOfHour Int @default(0)
+  /// IANA timezone the schedule is interpreted in.
+  timezone     String @default("America/New_York")
+
+  active       Boolean @default(true)
+  nextRunAt    DateTime
+  lastRunAt    DateTime?
+  runCount     Int @default(0)
+
+  createdById  String
+  createdBy    TH_User @relation("RecurringTemplateCreator", fields: [createdById], references: [id])
+
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  tickets      TH_Ticket[]
+
+  @@index([active, nextRunAt])
+  @@map("th_recurring_ticket_templates")
   @@schema("tickethub")
 }
 

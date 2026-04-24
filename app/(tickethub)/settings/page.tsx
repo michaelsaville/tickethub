@@ -23,6 +23,11 @@ const GROUPS = [
         title: 'Tax Rates',
         description: 'Sales tax rate per state',
       },
+      {
+        href: '/recurring-tickets',
+        title: 'Recurring Tickets',
+        description: 'Auto-create tickets on a daily/weekly/monthly schedule',
+      },
     ],
   },
   {

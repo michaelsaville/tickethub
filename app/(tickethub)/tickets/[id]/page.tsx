@@ -74,6 +74,7 @@ export default async function TicketDetailPage({
       site: true,
       contract: true,
       asset: true,
+      recurringTemplate: { select: { id: true, name: true } },
       assignedTo: { select: { id: true, name: true, email: true } },
       createdBy: { select: { id: true, name: true } },
       attachments: { orderBy: { createdAt: 'desc' } },
@@ -172,6 +173,17 @@ export default async function TicketDetailPage({
           </Link>
           {ticket.contact && ` · ${ticket.contact.firstName} ${ticket.contact.lastName}`}
         </div>
+        {ticket.recurringTemplate && (
+          <div className="mt-2">
+            <Link
+              href={`/recurring-tickets/${ticket.recurringTemplate.id}`}
+              className="inline-flex items-center gap-1 rounded-full border border-accent/40 bg-accent/10 px-2 py-0.5 text-[11px] text-accent hover:bg-accent/20"
+            >
+              <span aria-hidden>↻</span>
+              From recurring: {ticket.recurringTemplate.name}
+            </Link>
+          </div>
+        )}
       </header>
 
       <div className="grid gap-6 xl:grid-cols-[260px,1fr,300px]">
