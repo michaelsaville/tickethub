@@ -64,6 +64,18 @@ export default async function ReportsPage() {
               title: 'Client Report (QBR)',
               desc: 'Client-facing monthly/quarterly service reports with PDF export',
             },
+            {
+              href: '/reports/ar-aging',
+              icon: '🧾',
+              title: 'AR Aging',
+              desc: 'Outstanding invoice balances by client, bucketed by days past due',
+            },
+            {
+              href: '/reports/unbilled-time',
+              icon: '⏱️',
+              title: 'Unbilled Time',
+              desc: 'Billable charges not yet on an invoice — revenue at risk',
+            },
           ].map((r) => (
             <a
               key={r.href}
