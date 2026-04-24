@@ -236,6 +236,28 @@ export async function updateClientBillingEmail(
   }
 }
 
+export async function updateClientTaxExempt(
+  clientId: string,
+  isExempt: boolean,
+): Promise<StatusResult> {
+  const session = await getSession()
+  if (!session?.user?.id) return { ok: false, error: 'Unauthorized' }
+  if (!hasMinRole(session.user.role, 'TICKETHUB_ADMIN')) {
+    return { ok: false, error: 'Admin role required' }
+  }
+  try {
+    await prisma.tH_Client.update({
+      where: { id: clientId },
+      data: { isTaxExempt: isExempt },
+    })
+    revalidatePath(`/clients/${clientId}`)
+    return { ok: true }
+  } catch (e) {
+    console.error('[actions/invoices] updateTaxExempt failed', e)
+    return { ok: false, error: 'Failed to update tax-exempt status' }
+  }
+}
+
 export async function deleteDraftInvoice(
   invoiceId: string,
 ): Promise<StatusResult> {

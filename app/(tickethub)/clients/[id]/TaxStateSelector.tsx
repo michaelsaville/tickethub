@@ -4,6 +4,7 @@ import { useState, useTransition } from 'react'
 import {
   updateClientBillingEmail,
   updateClientBillingState,
+  updateClientTaxExempt,
 } from '@/app/lib/actions/invoices'
 import { SUPPORTED_TAX_STATES } from '@/app/lib/tax'
 
@@ -11,13 +12,18 @@ export function BillingSettings({
   clientId,
   initialState,
   initialEmail,
+  initialTaxExempt,
+  canEditTaxExempt = false,
 }: {
   clientId: string
   initialState: string | null
   initialEmail: string | null
+  initialTaxExempt?: boolean
+  canEditTaxExempt?: boolean
 }) {
   const [state, setState] = useState(initialState ?? '')
   const [email, setEmail] = useState(initialEmail ?? '')
+  const [taxExempt, setTaxExempt] = useState(initialTaxExempt ?? false)
   const [err, setErr] = useState<string | null>(null)
   const [isPending, startTransition] = useTransition()
 
@@ -43,6 +49,19 @@ export function BillingSettings({
     })
   }
 
+  function saveTaxExempt(next: boolean) {
+    const prev = taxExempt
+    setTaxExempt(next)
+    setErr(null)
+    startTransition(async () => {
+      const res = await updateClientTaxExempt(clientId, next)
+      if (!res.ok) {
+        setErr(res.error)
+        setTaxExempt(prev)
+      }
+    })
+  }
+
   return (
     <div className="th-card">
       <div className="mb-3 font-mono text-[10px] uppercase tracking-wider text-th-text-muted">
@@ -56,7 +75,7 @@ export function BillingSettings({
           <select
             value={state}
             onChange={(e) => saveState(e.target.value)}
-            disabled={isPending}
+            disabled={isPending || taxExempt}
             className="th-input text-sm"
           >
             <option value="">—</option>
@@ -82,6 +101,22 @@ export function BillingSettings({
           />
         </div>
       </div>
+      {canEditTaxExempt && (
+        <label className="mt-3 flex items-center gap-2 text-xs text-slate-300">
+          <input
+            type="checkbox"
+            checked={taxExempt}
+            onChange={(e) => saveTaxExempt(e.target.checked)}
+            disabled={isPending}
+            className="h-4 w-4 rounded border-th-border bg-th-base text-accent focus:ring-accent"
+          />
+          <span>
+            <strong>Tax exempt</strong> — skip sales tax on all invoices and
+            estimates regardless of tax state. Keep an exemption certificate on
+            file.
+          </span>
+        </label>
+      )}
       <p className="mt-2 text-xs text-th-text-muted">
         Tax state determines sales tax on invoices. Billing email receives
         invoice PDFs when you send them — falls back to the primary contact's

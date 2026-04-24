@@ -32,6 +32,10 @@ model TH_Client {
   /// email when set. Useful when a client has an ap@ / billing@ mailbox
   /// separate from the person you talk to day to day.
   billingEmail              String?
+  /// When true, invoices and estimates skip sales tax regardless of
+  /// billingState. Use for 501(c)(3)s, govt entities, and resellers
+  /// with a valid exemption certificate on file.
+  isTaxExempt               Boolean  @default(false)
   /// Per-client opt-out for automated ticket emails (new ticket opened,
   /// public reply added). Master kill switch is `TICKETHUB_CLIENT_EMAILS_ENABLED`
   /// env var — this flag only matters when the env is ON.

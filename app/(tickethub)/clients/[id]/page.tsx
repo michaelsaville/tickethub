@@ -76,6 +76,8 @@ export default async function ClientDetailPage({
             clientId={client.id}
             initialState={client.billingState}
             initialEmail={client.billingEmail}
+            initialTaxExempt={client.isTaxExempt}
+            canEditTaxExempt={canSeeAmounts}
           />
         </div>
         {canSeeAmounts && (

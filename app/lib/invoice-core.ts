@@ -21,15 +21,17 @@ export async function createInvoiceCore(
 > {
   const client = await prisma.tH_Client.findUnique({
     where: { id: clientId },
-    select: { id: true, billingState: true },
+    select: { id: true, billingState: true, isTaxExempt: true },
   })
   if (!client) return { ok: false, error: 'Client not found' }
-  if (!client.billingState) {
+  if (!client.billingState && !client.isTaxExempt) {
     return { ok: false, error: "Set the client's Tax State before invoicing" }
   }
 
-  const taxState = client.billingState.toUpperCase()
-  const taxRate = await rateForStateAsync(taxState)
+  const taxState = client.billingState?.toUpperCase() ?? null
+  const taxRate = client.isTaxExempt
+    ? 0
+    : await rateForStateAsync(taxState!)
 
   const charges = await prisma.tH_Charge.findMany({
     where: {

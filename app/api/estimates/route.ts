@@ -39,12 +39,14 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: 'Client and title required' }, { status: 400 })
   }
 
-  // Resolve tax rate from client's billing state
+  // Resolve tax rate from client's billing state (tax-exempt → 0)
   const client = await prisma.tH_Client.findUnique({
     where: { id: clientId },
-    select: { billingState: true },
+    select: { billingState: true, isTaxExempt: true },
   })
-  const taxRate = await rateForStateAsync(client?.billingState)
+  const taxRate = client?.isTaxExempt
+    ? 0
+    : await rateForStateAsync(client?.billingState)
 
   // Build estimate items
   const estimateItems: { itemId: string; description?: string; quantity: number; unitPrice: number; totalPrice: number; sortOrder: number }[] = []
