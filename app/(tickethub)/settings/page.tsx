@@ -38,6 +38,11 @@ const GROUPS = [
         title: 'Invoice Template',
         description: 'Customize invoice PDF layout, colors, and logo',
       },
+      {
+        href: '/settings/estimate-template',
+        title: 'Estimate Template',
+        description: 'Customize estimate PDF layout and colors (logo shared with invoice)',
+      },
     ],
   },
   {

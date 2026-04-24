@@ -11,13 +11,13 @@ function envOr(envKey: string, fallback: string): string {
 }
 
 export const ORG = {
-  name: envOr('ORG_NAME', 'PCC2K'),
-  tagline: envOr('ORG_TAGLINE', 'Managed IT Services'),
-  address: envOr('ORG_ADDRESS', '123 Main Street'),
-  city: envOr('ORG_CITY', 'Morgantown'),
-  state: envOr('ORG_STATE', 'WV'),
-  zip: envOr('ORG_ZIP', '26505'),
-  phone: envOr('ORG_PHONE', '(304) 555-0100'),
+  name: envOr('ORG_NAME', 'Precision Computers'),
+  tagline: envOr('ORG_TAGLINE', 'Precision Computers'),
+  address: envOr('ORG_ADDRESS', 'PO Box 128'),
+  city: envOr('ORG_CITY', 'Cumberland'),
+  state: envOr('ORG_STATE', 'MD'),
+  zip: envOr('ORG_ZIP', '21502'),
+  phone: envOr('ORG_PHONE', '(814) 322-6908'),
   email: envOr('ORG_EMAIL', 'billing@pcc2k.com'),
   website: envOr('ORG_WEBSITE', 'https://pcc2k.com'),
 }

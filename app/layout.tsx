@@ -3,7 +3,7 @@ import './globals.css'
 
 export const metadata: Metadata = {
   title: 'TicketHub',
-  description: 'MSP Ticketing & Operations — PCC2K',
+  description: 'MSP Ticketing & Operations — Precision Computers',
   manifest: '/manifest.json',
 }
 

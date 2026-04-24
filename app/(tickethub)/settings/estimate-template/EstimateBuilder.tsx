@@ -1,5 +1,6 @@
 'use client'
 
+import Link from 'next/link'
 import { useState, useTransition, useCallback } from 'react'
 import {
   DndContext,
@@ -17,12 +18,12 @@ import {
   arrayMove,
 } from '@dnd-kit/sortable'
 import type {
-  InvoiceTemplateConfig,
-  InvoiceSectionConfig,
-} from '@/app/types/invoice-template'
-import { saveInvoiceTemplateConfig } from '@/app/lib/actions/invoice-template'
+  EstimateTemplateConfig,
+  EstimateSectionConfig,
+} from '@/app/types/estimate-template'
+import { saveEstimateTemplateConfig } from '@/app/lib/actions/estimate-template'
 import { SectionCard } from './SectionCard'
-import { InvoicePreview } from './InvoicePreview'
+import { EstimatePreview } from './EstimatePreview'
 
 const FONT_OPTIONS = [
   { value: 'Helvetica', label: 'Helvetica (Sans-serif)' },
@@ -35,19 +36,17 @@ const PAGE_OPTIONS = [
   { value: 'A4', label: 'A4 (210mm x 297mm)' },
 ] as const
 
-export function InvoiceBuilder({
+export function EstimateBuilder({
   initialConfig,
-  initialLogoUrl,
+  logoUrl,
 }: {
-  initialConfig: InvoiceTemplateConfig
-  initialLogoUrl: string | null
+  initialConfig: EstimateTemplateConfig
+  logoUrl: string | null
 }) {
-  const [config, setConfig] = useState<InvoiceTemplateConfig>(initialConfig)
-  const [logoUrl, setLogoUrl] = useState<string | null>(initialLogoUrl)
+  const [config, setConfig] = useState<EstimateTemplateConfig>(initialConfig)
   const [isPending, startTransition] = useTransition()
   const [err, setErr] = useState<string | null>(null)
   const [saved, setSaved] = useState(false)
-  const [uploading, setUploading] = useState(false)
 
   const sensors = useSensors(
     useSensor(PointerSensor),
@@ -75,7 +74,7 @@ export function InvoiceBuilder({
   }
 
   const updateSection = useCallback(
-    (updated: InvoiceSectionConfig) => {
+    (updated: EstimateSectionConfig) => {
       setConfig((prev) => ({
         ...prev,
         sections: prev.sections.map((s) =>
@@ -86,9 +85,9 @@ export function InvoiceBuilder({
     [],
   )
 
-  function updateGlobalStyle<K extends keyof InvoiceTemplateConfig['globalStyles']>(
+  function updateGlobalStyle<K extends keyof EstimateTemplateConfig['globalStyles']>(
     key: K,
-    value: InvoiceTemplateConfig['globalStyles'][K],
+    value: EstimateTemplateConfig['globalStyles'][K],
   ) {
     setConfig((prev) => ({
       ...prev,
@@ -100,7 +99,7 @@ export function InvoiceBuilder({
     setErr(null)
     setSaved(false)
     startTransition(async () => {
-      const res = await saveInvoiceTemplateConfig(config)
+      const res = await saveEstimateTemplateConfig(config)
       if (!res.ok) {
         setErr(res.error)
         return
@@ -110,62 +109,9 @@ export function InvoiceBuilder({
     })
   }
 
-  async function handleLogoUpload(e: React.ChangeEvent<HTMLInputElement>) {
-    const file = e.target.files?.[0]
-    if (!file) return
-
-    if (file.size > 5_000_000) {
-      setErr('Logo must be under 5MB')
-      return
-    }
-
-    setUploading(true)
-    setErr(null)
-    try {
-      const formData = new FormData()
-      formData.append('logo', file)
-      const res = await fetch('/api/invoice-template/logo', {
-        method: 'POST',
-        body: formData,
-      })
-      if (!res.ok) {
-        const msg = await res.text()
-        setErr(msg || 'Upload failed')
-        return
-      }
-      const { url } = await res.json()
-      setLogoUrl(url)
-      setSaved(true)
-      setTimeout(() => setSaved(false), 2000)
-    } catch {
-      setErr('Logo upload failed')
-    } finally {
-      setUploading(false)
-    }
-  }
-
-  async function removeLogo() {
-    setErr(null)
-    try {
-      const res = await fetch('/api/invoice-template/logo', { method: 'DELETE' })
-      if (!res.ok) {
-        const msg = await res.text()
-        setErr(msg || 'Remove failed')
-        return
-      }
-      setLogoUrl(null)
-      setSaved(true)
-      setTimeout(() => setSaved(false), 2000)
-    } catch {
-      setErr('Remove failed')
-    }
-  }
-
   return (
     <div className="grid gap-6 xl:grid-cols-[1fr,1fr]">
-      {/* Left: Controls */}
       <div className="space-y-4">
-        {/* Sections */}
         <div>
           <h2 className="mb-2 font-mono text-[10px] uppercase tracking-wider text-th-text-muted">
             Sections (drag to reorder)
@@ -192,7 +138,6 @@ export function InvoiceBuilder({
           </DndContext>
         </div>
 
-        {/* Global Styles */}
         <div className="th-card space-y-3">
           <h2 className="font-mono text-[10px] uppercase tracking-wider text-th-text-muted">
             Global Styles
@@ -214,7 +159,7 @@ export function InvoiceBuilder({
                 value={config.globalStyles.primaryColor}
                 onChange={(e) => updateGlobalStyle('primaryColor', e.target.value)}
                 className="th-input w-28 font-mono text-sm"
-                placeholder="#F97316"
+                placeholder="#3b82f6"
               />
             </div>
           </div>
@@ -228,7 +173,7 @@ export function InvoiceBuilder({
               onChange={(e) =>
                 updateGlobalStyle(
                   'fontFamily',
-                  e.target.value as InvoiceTemplateConfig['globalStyles']['fontFamily'],
+                  e.target.value as EstimateTemplateConfig['globalStyles']['fontFamily'],
                 )
               }
               className="th-input text-sm"
@@ -250,7 +195,7 @@ export function InvoiceBuilder({
               onChange={(e) =>
                 updateGlobalStyle(
                   'pageSize',
-                  e.target.value as InvoiceTemplateConfig['globalStyles']['pageSize'],
+                  e.target.value as EstimateTemplateConfig['globalStyles']['pageSize'],
                 )
               }
               className="th-input text-sm"
@@ -264,8 +209,7 @@ export function InvoiceBuilder({
           </div>
         </div>
 
-        {/* Logo Upload */}
-        <div className="th-card space-y-3">
+        <div className="th-card space-y-2">
           <h2 className="font-mono text-[10px] uppercase tracking-wider text-th-text-muted">
             Logo
           </h2>
@@ -273,34 +217,27 @@ export function InvoiceBuilder({
             <div className="flex items-center gap-3">
               <img
                 src={logoUrl}
-                alt="Logo preview"
-                className="h-10 max-w-[120px] object-contain"
+                alt="Logo"
+                className="h-10 max-w-[160px] object-contain"
               />
-              <button
-                type="button"
-                onClick={removeLogo}
-                className="th-btn-ghost text-xs text-priority-urgent"
-              >
-                Remove
-              </button>
+              <span className="text-xs text-th-text-muted">
+                Shared with invoice template
+              </span>
             </div>
           ) : (
-            <label className="block">
-              <span className="text-xs text-th-text-secondary">
-                Upload a logo (PNG/JPG/SVG, max 5MB)
-              </span>
-              <input
-                type="file"
-                accept="image/png,image/jpeg,image/svg+xml"
-                onChange={handleLogoUpload}
-                disabled={uploading}
-                className="mt-1 block w-full text-xs text-th-text-secondary file:mr-2 file:rounded file:border-0 file:bg-th-elevated file:px-3 file:py-1 file:text-xs file:text-slate-100 hover:file:bg-accent/20"
-              />
-            </label>
+            <p className="text-xs text-th-text-secondary">
+              No logo uploaded yet.
+            </p>
           )}
+          <p className="text-xs text-th-text-muted">
+            Manage the logo on the{' '}
+            <Link href="/settings/invoice-template" className="text-accent underline">
+              Invoice Template
+            </Link>{' '}
+            page — it’s shared across invoices and estimates.
+          </p>
         </div>
 
-        {/* Save */}
         {err && (
           <div className="rounded-md border border-priority-urgent/40 bg-priority-urgent/10 px-3 py-1.5 text-xs text-priority-urgent">
             {err}
@@ -321,13 +258,12 @@ export function InvoiceBuilder({
         </button>
       </div>
 
-      {/* Right: Preview */}
       <div>
         <h2 className="mb-2 font-mono text-[10px] uppercase tracking-wider text-th-text-muted">
           Preview
         </h2>
         <div className="rounded-lg border border-th-border bg-gray-100 p-4">
-          <InvoicePreview config={config} logoUrl={logoUrl} />
+          <EstimatePreview config={config} logoUrl={logoUrl} />
         </div>
         <p className="mt-2 text-[10px] text-th-text-muted">
           This is an HTML approximation. The actual PDF may differ slightly in

@@ -4,6 +4,8 @@ import { renderToBuffer, type DocumentProps } from '@react-pdf/renderer'
 import { prisma } from '@/app/lib/prisma'
 import { requireAuth } from '@/app/lib/api-auth'
 import { EstimatePdf, type EstimatePdfData } from '@/app/lib/pdf/EstimatePdf'
+import { getInvoiceTemplateConfig } from '@/app/lib/actions/invoice-template'
+import { getEstimateTemplateConfig } from '@/app/lib/actions/estimate-template'
 
 export const runtime = 'nodejs'
 
@@ -55,7 +57,11 @@ export async function GET(
     })),
   }
 
-  const element = EstimatePdf({ data }) as ReactElement<DocumentProps>
+  const [{ logoUrl }, { config: templateConfig }] = await Promise.all([
+    getInvoiceTemplateConfig(),
+    getEstimateTemplateConfig(),
+  ])
+  const element = EstimatePdf({ data, logoUrl, templateConfig }) as ReactElement<DocumentProps>
   const buffer = await renderToBuffer(element)
 
   const download = req.nextUrl.searchParams.get('download') === '1'

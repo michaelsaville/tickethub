@@ -1211,3 +1211,19 @@ model TH_InvoiceTemplate {
   @@map("th_invoice_templates")
   @@schema("tickethub")
 }
+
+// ─── ESTIMATE TEMPLATE ───────────────────────────────────────────────────
+// Logo is intentionally shared from TH_InvoiceTemplate — one brand asset
+// flows to both documents.
+
+model TH_EstimateTemplate {
+  id        String   @id @default(cuid())
+  name      String   @default("Default")
+  config    Json     // EstimateTemplateConfig — sections, field visibility, colors, fonts
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("th_estimate_templates")
+  @@schema("tickethub")
+}

@@ -2,6 +2,7 @@ import 'server-only'
 import { prisma } from '@/app/lib/prisma'
 import { formatCents } from '@/app/lib/billing'
 import { sendMail } from '@/app/lib/m365'
+import { ORG } from '@/app/lib/org'
 
 type EstimateWithRelations = {
   id: string
@@ -80,7 +81,7 @@ export async function sendEstimateEmail(estimate: EstimateWithRelations) {
         <div style="margin:24px 0;text-align:center">
           <a href="${portalUrl}" style="background:#F97316;color:#fff;padding:12px 32px;border-radius:6px;text-decoration:none;font-weight:600;font-size:15px">Review & Approve</a>
         </div>
-        <p style="font-size:12px;color:#9ca3af;margin-top:24px">PCC2K · Precision Computer Consulting</p>
+        <p style="font-size:12px;color:#9ca3af;margin-top:24px">${ORG.name}</p>
       </div>
     </div>
   `
