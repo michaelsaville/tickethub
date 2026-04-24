@@ -1,25 +1,59 @@
 import type { ReactElement } from 'react'
-import { NextResponse, type NextRequest } from 'next/server'
+import { NextResponse } from 'next/server'
 import { renderToBuffer, type DocumentProps } from '@react-pdf/renderer'
 import { prisma } from '@/app/lib/prisma'
-import { requireAuth } from '@/app/lib/api-auth'
+import { verifyPortalHmac } from '@/app/lib/bff-hmac'
 import { InvoicePdf, type InvoicePdfData } from '@/app/lib/pdf/InvoicePdf'
 import { getInvoiceTemplateConfig } from '@/app/lib/actions/invoice-template'
 
-// Force the Node runtime — @react-pdf/renderer needs Node's Buffer +
-// fs-level font loading, not the Edge runtime.
 export const runtime = 'nodejs'
+export const dynamic = 'force-dynamic'
 
-export async function GET(
-  req: NextRequest,
-  { params }: { params: Promise<{ id: string }> },
-) {
-  const { error } = await requireAuth()
-  if (error) return error
-  const { id } = await params
+/**
+ * Portal-gated invoice PDF. Verifies HMAC, then verifies the invoice
+ * belongs to the named client before rendering and streaming the PDF
+ * back. DRAFT invoices are refused — portal never exposes drafts.
+ */
+export async function POST(req: Request) {
+  const rawBody = await req.text()
+  const verify = verifyPortalHmac(
+    rawBody,
+    req.headers.get('x-portal-signature'),
+    req.headers.get('x-portal-timestamp'),
+    process.env.PORTAL_BFF_SECRET ?? '',
+  )
+  if (!verify.ok) {
+    return NextResponse.json({ ok: false, error: verify.reason }, { status: verify.status })
+  }
 
-  const invoice = await prisma.tH_Invoice.findUnique({
-    where: { id },
+  let payload: { clientName: string; invoiceId: string }
+  try {
+    payload = JSON.parse(rawBody)
+  } catch {
+    return NextResponse.json({ ok: false, error: 'invalid JSON body' }, { status: 400 })
+  }
+  if (!payload.clientName || !payload.invoiceId) {
+    return NextResponse.json(
+      { ok: false, error: 'clientName + invoiceId required' },
+      { status: 400 },
+    )
+  }
+
+  const client = await prisma.tH_Client.findFirst({
+    where: { name: payload.clientName, isActive: true },
+    select: { id: true },
+  })
+  if (!client) {
+    return NextResponse.json({ ok: false, error: 'client not found' }, { status: 404 })
+  }
+
+  const invoice = await prisma.tH_Invoice.findFirst({
+    where: {
+      id: payload.invoiceId,
+      clientId: client.id,
+      deletedAt: null,
+      status: { not: 'DRAFT' },
+    },
     include: {
       client: { select: { name: true, billingState: true } },
       charges: {
@@ -32,10 +66,7 @@ export async function GET(
     },
   })
   if (!invoice) {
-    return NextResponse.json(
-      { data: null, error: 'Not found' },
-      { status: 404 },
-    )
+    return NextResponse.json({ ok: false, error: 'invoice not found' }, { status: 404 })
   }
 
   const data: InvoicePdfData = {
@@ -69,7 +100,6 @@ export async function GET(
     const { config: templateConfig, logoUrl } = await getInvoiceTemplateConfig()
     const element = InvoicePdf({ data, templateConfig, logoUrl }) as ReactElement<DocumentProps>
     const buffer = await renderToBuffer(element)
-    const download = req.nextUrl.searchParams.get('download') === '1'
     const filename = `invoice-${invoice.invoiceNumber}.pdf`
     return new NextResponse(
       new Blob([new Uint8Array(buffer)], { type: 'application/pdf' }),
@@ -77,18 +107,16 @@ export async function GET(
         status: 200,
         headers: {
           'Content-Type': 'application/pdf',
-          'Content-Disposition': `${download ? 'attachment' : 'inline'}; filename="${filename}"`,
+          'Content-Length': String(buffer.length),
+          'Content-Disposition': `attachment; filename="${filename}"`,
           'Cache-Control': 'private, no-store',
         },
       },
     )
   } catch (e) {
-    console.error('[api/invoices/pdf] render failed', e)
+    console.error('[bff portal invoices/pdf] render failed', e)
     return NextResponse.json(
-      {
-        data: null,
-        error: `Failed to render PDF: ${e instanceof Error ? e.message : String(e)}`,
-      },
+      { ok: false, error: 'Failed to render PDF' },
       { status: 500 },
     )
   }

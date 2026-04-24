@@ -85,21 +85,23 @@ export async function POST(req: NextRequest) {
       break
     }
     case 'payment_intent.succeeded': {
-      // Backup path — covers cases where the checkout session didn't
-      // fire its own event (shouldn't happen in practice, but we log
-      // anyway so ops can reconcile).
+      // Primary path for the "Charge saved card" flow (PaymentIntent with
+      // off_session: true) and a backup for Payment-Link redemption.
       const pi = event.data.object as Stripe.PaymentIntent
       const invoiceId = pi.metadata?.tickethubInvoiceId
       if (!invoiceId) break
       const invoice = await prisma.tH_Invoice.findUnique({
         where: { id: invoiceId },
-        select: { id: true, status: true },
+        select: { id: true, status: true, stripePaymentLinkId: true },
       })
       if (!invoice || invoice.status === 'PAID') break
       await prisma.tH_Invoice.update({
         where: { id: invoice.id },
         data: { status: 'PAID', paidAt: new Date(), stripePaymentIntentId: pi.id },
       })
+      // Kill any stale Payment Link so it can't be redeemed after we've
+      // already collected via saved card.
+      void deactivatePaymentLink(invoice.stripePaymentLinkId)
       break
     }
     default:

@@ -6,7 +6,9 @@ import { formatCents } from '@/app/lib/billing'
 import { formatRate } from '@/app/lib/tax'
 import { m365Configured } from '@/app/lib/m365'
 import { ORG } from '@/app/lib/org'
+import { stripeConfigured } from '@/app/lib/stripe'
 import { InvoiceActions } from './InvoiceActions'
+import { ChargeSavedCardButton } from './ChargeSavedCardButton'
 
 export const dynamic = 'force-dynamic'
 
@@ -48,6 +50,24 @@ export default async function InvoiceDetailPage({
     invoice.client.billingEmail ?? invoice.client.contacts[0]?.email ?? ''
   const defaultSubject = `Invoice #${invoice.invoiceNumber} from ${ORG.name}`
   const emailConfigured = m365Configured()
+  const canChargeSavedCard =
+    isAdmin &&
+    stripeConfigured() &&
+    (invoice.status === 'SENT' || invoice.status === 'OVERDUE')
+  const savedCards = canChargeSavedCard
+    ? await prisma.tH_SavedPaymentMethod.findMany({
+        where: { clientId: invoice.client.id },
+        orderBy: [{ isDefault: 'desc' }, { createdAt: 'desc' }],
+        select: {
+          id: true,
+          brand: true,
+          last4: true,
+          expMonth: true,
+          expYear: true,
+          isDefault: true,
+        },
+      })
+    : []
 
   return (
     <div className="p-6">
@@ -100,6 +120,22 @@ export default async function InvoiceDetailPage({
             defaultTo={defaultTo}
             defaultSubject={defaultSubject}
           />
+          {canChargeSavedCard && savedCards.length > 0 && (
+            <ChargeSavedCardButton
+              invoiceId={invoice.id}
+              clientId={invoice.client.id}
+              totalAmount={invoice.totalAmount}
+              savedCards={savedCards}
+            />
+          )}
+          {canChargeSavedCard && savedCards.length === 0 && (
+            <Link
+              href={`/clients/${invoice.client.id}/payment-methods`}
+              className="text-xs text-th-text-muted hover:text-accent"
+            >
+              + Add a card to charge
+            </Link>
+          )}
         </div>
       </header>
 

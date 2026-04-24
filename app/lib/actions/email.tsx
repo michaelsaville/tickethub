@@ -62,6 +62,7 @@ export async function sendInvoiceEmail(
       status: 'SENT',
       issueDate: invoice.issueDate,
       dueDate: invoice.dueDate,
+      paidAt: null,
       subtotal: invoice.subtotal,
       taxableSubtotal: invoice.taxableSubtotal,
       taxState: invoice.taxState,

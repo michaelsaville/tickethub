@@ -38,6 +38,9 @@ model TH_Client {
   emailClientOnTicketEvents Boolean @default(true)
   syncroId      Int?     @unique // Syncro customer ID for migration dedup
   qboCustomerId String?           // cached QBO customer ID for invoice sync
+  /// Stripe Customer object — created lazily on first saved-card add.
+  /// Null for clients we've never had to store a payment method for.
+  stripeCustomerId String? @unique
   isActive      Boolean  @default(true)
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
@@ -49,6 +52,7 @@ model TH_Client {
   assets    TH_Asset[]
   invoices  TH_Invoice[]
   estimates TH_Estimate[]
+  savedPaymentMethods TH_SavedPaymentMethod[]
   recurringTicketTemplates TH_RecurringTicketTemplate[]
 
   @@map("th_clients")
@@ -1298,6 +1302,36 @@ model TH_InvoiceTemplate {
   updatedAt DateTime @updatedAt
 
   @@map("th_invoice_templates")
+  @@schema("tickethub")
+}
+
+// ─── SAVED PAYMENT METHODS ───────────────────────────────────────────────
+// Card references stored on a Stripe Customer attached to TH_Client. Card
+// details (number, CVC) never touch our server — Stripe Elements tokenizes
+// client-side and returns a PaymentMethod ID we attach to the Customer.
+
+model TH_SavedPaymentMethod {
+  id                    String   @id @default(cuid())
+  clientId              String
+  client                TH_Client @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  /// Stripe PaymentMethod ID (`pm_…`). Source of truth lives on Stripe;
+  /// our row is a cache for list rendering + charge dispatch.
+  stripePaymentMethodId String   @unique
+  /// Card brand — visa, mastercard, amex, discover, etc.
+  brand                 String
+  last4                 String
+  expMonth              Int
+  expYear               Int
+  /// Cardholder name as provided during the SetupIntent, if any.
+  cardholderName        String?
+  isDefault             Boolean  @default(false)
+  /// Last time this card was used to successfully charge an invoice.
+  lastUsedAt            DateTime?
+  createdAt             DateTime @default(now())
+  updatedAt             DateTime @updatedAt
+
+  @@index([clientId])
+  @@map("th_saved_payment_methods")
   @@schema("tickethub")
 }
 

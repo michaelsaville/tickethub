@@ -4,6 +4,7 @@ import {
   Text,
   View,
   Image,
+  StyleSheet,
 } from '@react-pdf/renderer'
 import { formatCents } from '@/app/lib/billing'
 import { formatRate } from '@/app/lib/tax'
@@ -20,6 +21,7 @@ export interface InvoicePdfData {
   status: string
   issueDate: Date
   dueDate: Date | null
+  paidAt: Date | null
   subtotal: number
   taxableSubtotal: number
   taxState: string | null
@@ -137,8 +139,61 @@ export function InvoicePdf({
               return null
           }
         })}
+        {data.status === 'PAID' && <PaidStamp paidAt={data.paidAt} />}
       </Page>
     </Document>
+  )
+}
+
+const paidStampStyles = StyleSheet.create({
+  wrap: {
+    position: 'absolute',
+    top: 180,
+    left: 140,
+    right: 140,
+    alignItems: 'center',
+    justifyContent: 'center',
+    transform: 'rotate(-18deg)',
+    opacity: 0.75,
+  },
+  box: {
+    borderWidth: 4,
+    borderColor: '#15803d',
+    paddingVertical: 10,
+    paddingHorizontal: 36,
+    backgroundColor: 'rgba(220, 252, 231, 0.4)',
+    alignItems: 'center',
+  },
+  text: {
+    fontSize: 64,
+    fontFamily: 'Helvetica-Bold',
+    color: '#15803d',
+    letterSpacing: 6,
+  },
+  date: {
+    marginTop: 4,
+    fontSize: 10,
+    fontFamily: 'Helvetica',
+    color: '#166534',
+    letterSpacing: 2,
+  },
+})
+
+function PaidStamp({ paidAt }: { paidAt: Date | null }) {
+  const dateLabel = paidAt
+    ? paidAt.toLocaleDateString('en-US', {
+        year: 'numeric', month: 'short', day: 'numeric',
+      })
+    : null
+  return (
+    <View style={paidStampStyles.wrap} fixed>
+      <View style={paidStampStyles.box}>
+        <Text style={paidStampStyles.text}>PAID</Text>
+        {dateLabel && (
+          <Text style={paidStampStyles.date}>{dateLabel}</Text>
+        )}
+      </View>
+    </View>
   )
 }
 

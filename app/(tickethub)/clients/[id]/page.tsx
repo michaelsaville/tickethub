@@ -91,6 +91,14 @@ export default async function ClientDetailPage({
             + Invoice Client ({billableCount} billable)
           </Link>
         )}
+        {canSeeAmounts && (
+          <Link
+            href={`/clients/${client.id}/payment-methods`}
+            className="th-btn-secondary text-xs"
+          >
+            Payment methods
+          </Link>
+        )}
         <form action={startPortalImpersonationAction}>
           <input type="hidden" name="tickethubClientId" value={client.id} />
           <button
