@@ -6,6 +6,7 @@ import type { TH_ContractStatus, TH_ContractType } from '@prisma/client'
 import { prisma } from '@/app/lib/prisma'
 import { authOptions } from '@/app/lib/auth'
 import { parseCents } from '@/app/lib/billing'
+import { spawnMonthlyInvoiceForContract } from '@/app/lib/auto-invoice'
 
 export type ContractResult = { ok: true } | { ok: false; error: string }
 
@@ -68,6 +69,18 @@ export async function createContract(
     blockHours = n
   }
 
+  // Auto-invoice settings only apply to RECURRING contracts.
+  let autoInvoiceEnabled = false
+  let autoSendInvoice = false
+  let billingDayOfMonth: number | null = null
+  if (type === 'RECURRING') {
+    autoInvoiceEnabled = formData.get('autoInvoiceEnabled') === 'on'
+    autoSendInvoice = formData.get('autoSendInvoice') === 'on'
+    const dayRaw = (formData.get('billingDayOfMonth') as string | null)?.trim() ?? ''
+    const day = parseInt(dayRaw, 10)
+    billingDayOfMonth = Number.isFinite(day) ? Math.max(1, Math.min(28, day)) : 1
+  }
+
   try {
     await prisma.tH_Contract.create({
       data: {
@@ -80,6 +93,9 @@ export async function createContract(
         monthlyFee,
         blockHours,
         notes,
+        autoInvoiceEnabled,
+        autoSendInvoice,
+        billingDayOfMonth,
       },
     })
     revalidatePath(`/clients/${clientId}`)
@@ -101,6 +117,9 @@ export async function updateContract(
     monthlyFee?: number | null
     blockHours?: number | null
     notes?: string | null
+    autoInvoiceEnabled?: boolean
+    autoSendInvoice?: boolean
+    billingDayOfMonth?: number | null
   },
 ): Promise<ContractResult> {
   if (!(await getUserId())) return { ok: false, error: 'Unauthorized' }
@@ -123,6 +142,29 @@ export async function updateContract(
   } catch (e) {
     console.error('[actions/contracts] update failed', e)
     return { ok: false, error: 'Failed to update contract' }
+  }
+}
+
+export async function runAutoInvoiceNow(
+  contractId: string,
+): Promise<{ ok: true; invoiceId: string } | { ok: false; error: string }> {
+  if (!(await getUserId())) return { ok: false, error: 'Unauthorized' }
+  try {
+    const result = await spawnMonthlyInvoiceForContract(contractId)
+    if (!result.ok) return { ok: false, error: result.error }
+    const contract = await prisma.tH_Contract.findUnique({
+      where: { id: contractId },
+      select: { clientId: true },
+    })
+    if (contract) {
+      revalidatePath(`/clients/${contract.clientId}`)
+      revalidatePath(`/clients/${contract.clientId}/contracts`)
+    }
+    revalidatePath('/invoices')
+    return { ok: true, invoiceId: result.invoiceId }
+  } catch (e) {
+    console.error('[actions/contracts] run-auto-invoice failed', e)
+    return { ok: false, error: 'Failed to spawn invoice' }
   }
 }
 

@@ -138,6 +138,19 @@ model TH_Contract {
   blockHoursUsed Float             @default(0)
   notes          String?
   isGlobal       Boolean           @default(false)
+  /// Auto-generate a DRAFT invoice each month for `monthlyFee`. Requires
+  /// `type=RECURRING` + `status=ACTIVE` + `monthlyFee > 0`.
+  autoInvoiceEnabled Boolean    @default(false)
+  /// Auto-send the generated invoice (DRAFT → SENT via sendInvoiceEmail).
+  /// Requires autoInvoiceEnabled. Off by default — admins review drafts.
+  autoSendInvoice    Boolean    @default(false)
+  /// Day of the month (1–28) to fire the auto-invoice. Clamped to 28 to
+  /// sidestep Feb edge cases.
+  billingDayOfMonth  Int?       @default(1)
+  /// Audit + idempotency anchor for the auto-invoice cron — set after a
+  /// successful auto-invoice. Cron skips when this is in the current
+  /// calendar month (America/New_York).
+  lastAutoInvoicedAt DateTime?
   createdAt      DateTime          @default(now())
   updatedAt      DateTime          @updatedAt
 

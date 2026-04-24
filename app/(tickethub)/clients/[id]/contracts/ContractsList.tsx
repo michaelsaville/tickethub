@@ -6,6 +6,7 @@ import type { TH_ContractStatus, TH_ContractType } from '@prisma/client'
 import {
   createContract,
   deleteContract,
+  runAutoInvoiceNow,
   updateContract,
   type ContractResult,
 } from '@/app/lib/actions/contracts'
@@ -23,6 +24,10 @@ type Contract = {
   blockHoursUsed: number
   isGlobal: boolean
   notes: string | null
+  autoInvoiceEnabled: boolean
+  autoSendInvoice: boolean
+  billingDayOfMonth: number | null
+  lastAutoInvoicedAt: Date | string | null
   chargeCount: number
   ticketCount: number
 }
@@ -121,9 +126,12 @@ function ContractCard({
             {TYPE_LABELS[contract.type]}
           </div>
           {contract.type === 'RECURRING' && contract.monthlyFee != null && (
-            <div className="mt-2 font-mono text-sm text-slate-200">
-              {formatCents(contract.monthlyFee)} / month
-            </div>
+            <>
+              <div className="mt-2 font-mono text-sm text-slate-200">
+                {formatCents(contract.monthlyFee)} / month
+              </div>
+              <AutoInvoicePanel contract={contract} />
+            </>
           )}
           {contract.type === 'BLOCK_HOURS' && contract.blockHours != null && (
             <div className="mt-2 font-mono text-sm text-slate-200">
@@ -178,6 +186,109 @@ function ContractCard({
         </div>
       </div>
     </div>
+  )
+}
+
+function AutoInvoicePanel({ contract }: { contract: Contract }) {
+  const [enabled, setEnabled] = useState(contract.autoInvoiceEnabled)
+  const [autoSend, setAutoSend] = useState(contract.autoSendInvoice)
+  const [day, setDay] = useState(contract.billingDayOfMonth ?? 1)
+  const [pending, startTransition] = useTransition()
+  const [err, setErr] = useState<string | null>(null)
+  const [msg, setMsg] = useState<string | null>(null)
+
+  function save(patch: {
+    autoInvoiceEnabled?: boolean
+    autoSendInvoice?: boolean
+    billingDayOfMonth?: number
+  }) {
+    setErr(null)
+    setMsg(null)
+    startTransition(async () => {
+      const res = await updateContract(contract.id, patch)
+      if (!res.ok) setErr(res.error)
+    })
+  }
+
+  function runNow() {
+    if (!confirm('Create a DRAFT invoice right now for this contract?')) return
+    setErr(null)
+    setMsg(null)
+    startTransition(async () => {
+      const res = await runAutoInvoiceNow(contract.id)
+      if (!res.ok) setErr(res.error)
+      else setMsg('Draft invoice created. Review it in Invoices.')
+    })
+  }
+
+  return (
+    <details className="mt-3 rounded border border-th-border bg-th-elevated/40">
+      <summary className="cursor-pointer px-3 py-2 text-xs text-th-text-secondary hover:text-slate-100">
+        Auto-invoice{' '}
+        <span className={enabled ? 'text-accent' : 'text-th-text-muted'}>
+          {enabled ? `(on, day ${day})` : '(off)'}
+        </span>
+      </summary>
+      <div className="space-y-2 px-3 py-3">
+        <label className="flex items-center gap-2 text-xs text-slate-200">
+          <input
+            type="checkbox"
+            checked={enabled}
+            onChange={(e) => {
+              setEnabled(e.target.checked)
+              save({ autoInvoiceEnabled: e.target.checked })
+            }}
+            disabled={pending}
+          />
+          Enable monthly auto-invoice
+        </label>
+        <label className="flex items-center gap-2 text-xs text-slate-200">
+          <input
+            type="checkbox"
+            checked={autoSend}
+            onChange={(e) => {
+              setAutoSend(e.target.checked)
+              save({ autoSendInvoice: e.target.checked })
+            }}
+            disabled={pending || !enabled}
+          />
+          Auto-send invoice email <span className="text-th-text-muted">(not wired yet — drafts only)</span>
+        </label>
+        <label className="flex items-center gap-2 text-xs text-slate-200">
+          <span>Billing day of month</span>
+          <input
+            type="number"
+            min={1}
+            max={28}
+            value={day}
+            onChange={(e) => {
+              const n = Math.max(1, Math.min(28, parseInt(e.target.value || '1', 10)))
+              setDay(n)
+            }}
+            onBlur={() => save({ billingDayOfMonth: day })}
+            disabled={pending || !enabled}
+            className="th-input w-16 font-mono text-xs"
+          />
+        </label>
+        <div className="flex items-center justify-between gap-2 pt-1">
+          <div className="text-[10px] uppercase tracking-wider text-th-text-muted">
+            {contract.lastAutoInvoicedAt
+              ? `last auto: ${new Date(contract.lastAutoInvoicedAt).toLocaleString()}`
+              : 'never auto-invoiced'}
+          </div>
+          <button
+            type="button"
+            onClick={runNow}
+            disabled={pending || !enabled}
+            className="th-btn-ghost text-xs text-accent disabled:opacity-50"
+          >
+            Run now
+          </button>
+        </div>
+        {err && <div className="text-xs text-priority-urgent">{err}</div>}
+        {msg && <div className="text-xs text-accent">{msg}</div>}
+      </div>
+    </details>
   )
 }
 
@@ -236,17 +347,40 @@ function NewContractForm({
       </div>
 
       {type === 'RECURRING' && (
-        <div>
-          <label className="mb-1 block font-mono text-[10px] uppercase tracking-wider text-th-text-muted">
-            Monthly Fee
-          </label>
-          <input
-            name="monthlyFee"
-            placeholder="$500.00"
-            className="th-input font-mono"
-            required
-          />
-        </div>
+        <>
+          <div>
+            <label className="mb-1 block font-mono text-[10px] uppercase tracking-wider text-th-text-muted">
+              Monthly Fee
+            </label>
+            <input
+              name="monthlyFee"
+              placeholder="$500.00"
+              className="th-input font-mono"
+              required
+            />
+          </div>
+          <div className="space-y-2 rounded border border-th-border bg-th-elevated/40 p-3">
+            <label className="flex items-center gap-2 text-xs text-slate-200">
+              <input type="checkbox" name="autoInvoiceEnabled" />
+              Auto-invoice monthly (creates DRAFT each billing day)
+            </label>
+            <label className="flex items-center gap-2 text-xs text-slate-200">
+              <input type="checkbox" name="autoSendInvoice" />
+              Auto-send (not wired yet — drafts for now)
+            </label>
+            <label className="flex items-center gap-2 text-xs text-slate-200">
+              <span>Billing day</span>
+              <input
+                name="billingDayOfMonth"
+                type="number"
+                min={1}
+                max={28}
+                defaultValue={1}
+                className="th-input w-16 font-mono text-xs"
+              />
+            </label>
+          </div>
+        </>
       )}
       {type === 'BLOCK_HOURS' && (
         <div>

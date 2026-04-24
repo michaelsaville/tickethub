@@ -58,6 +58,10 @@ export default async function ContractsPage({
           blockHoursUsed: c.blockHoursUsed,
           isGlobal: c.isGlobal,
           notes: c.notes,
+          autoInvoiceEnabled: c.autoInvoiceEnabled,
+          autoSendInvoice: c.autoSendInvoice,
+          billingDayOfMonth: c.billingDayOfMonth,
+          lastAutoInvoicedAt: c.lastAutoInvoicedAt,
           chargeCount: c._count.charges,
           ticketCount: c._count.tickets,
         }))}
