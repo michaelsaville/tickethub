@@ -10,6 +10,8 @@ import { notifyUser } from '@/app/lib/notify-server'
 import { m365Configured, sendMail } from '@/app/lib/m365'
 import { isAutomationEnabled } from '@/app/lib/settings'
 import { updateTicketStatusCore } from '@/app/lib/tickets-core'
+import { emit } from '@/app/lib/automation/bus'
+import { EVENT_TYPES } from '@/app/lib/automation/events'
 
 export type AppointmentResult = { ok: true; id?: string } | { ok: false; error: string }
 
@@ -139,6 +141,19 @@ export async function createAppointment(input: {
     },
   })
 
+  await emit({
+    type: EVENT_TYPES.APPOINTMENT_SCHEDULED,
+    entityType: 'appointment',
+    entityId: appt.id,
+    actorId: userId,
+    payload: {
+      ticketId: input.ticketId,
+      technicianId: input.technicianId,
+      scheduledStart: start.toISOString(),
+      scheduledEnd: end.toISOString(),
+    },
+  })
+
   // Notify assigned tech (unless they scheduled it themselves). When the
   // on-site workflow is active and this ticket is on the On-Site board,
   // prefix the title so the tech sees immediately that it's a field visit.
@@ -247,6 +262,7 @@ export async function updateAppointmentStatus(
       id: true,
       status: true,
       technicianId: true,
+      ticketId: true,
       scheduledStart: true,
       scheduledEnd: true,
       ticket: { select: { ticketNumber: true, title: true } },
@@ -280,6 +296,25 @@ export async function updateAppointmentStatus(
   await prisma.tH_Appointment.update({
     where: { id: appointmentId },
     data,
+  })
+
+  const specificEvent =
+    newStatus === 'COMPLETE'
+      ? EVENT_TYPES.APPOINTMENT_COMPLETED
+      : newStatus === 'CANCELLED'
+        ? EVENT_TYPES.APPOINTMENT_CANCELLED
+        : EVENT_TYPES.APPOINTMENT_STATUS_CHANGED
+  await emit({
+    type: specificEvent,
+    entityType: 'appointment',
+    entityId: appointmentId,
+    actorId: userId,
+    payload: {
+      from: appt.status,
+      to: newStatus,
+      ticketId: appt.ticketId,
+      technicianId: appt.technicianId,
+    },
   })
 
   // Notify tech of status change (unless they did it themselves)
@@ -343,10 +378,24 @@ export async function completeAndCharge(
   if (appt.chargeId) return { ok: true } // Already charged — idempotent
 
   // Mark complete if not already
-  if (appt.status !== 'COMPLETE') {
+  const wasAlreadyComplete = appt.status === 'COMPLETE'
+  if (!wasAlreadyComplete) {
     await prisma.tH_Appointment.update({
       where: { id: appointmentId },
       data: { status: 'COMPLETE', actualEnd: new Date() },
+    })
+    await emit({
+      type: EVENT_TYPES.APPOINTMENT_COMPLETED,
+      entityType: 'appointment',
+      entityId: appointmentId,
+      actorId: userId,
+      payload: {
+        from: appt.status,
+        to: 'COMPLETE',
+        ticketId: appt.ticketId,
+        technicianId: appt.technicianId,
+        viaCompleteAndCharge: true,
+      },
     })
   }
 
@@ -603,6 +652,20 @@ export async function scheduleVisitFromTicket(input: {
     })
     createdIds.push(appt.id)
 
+    await emit({
+      type: EVENT_TYPES.APPOINTMENT_SCHEDULED,
+      entityType: 'appointment',
+      entityId: appt.id,
+      actorId: userId,
+      payload: {
+        ticketId: input.ticketId,
+        technicianId: techId,
+        scheduledStart: start.toISOString(),
+        scheduledEnd: end.toISOString(),
+        viaScheduleVisitFromTicket: true,
+      },
+    })
+
     if (techId !== userId) {
       const timeStr = start.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })
       const dateStr = start.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })
@@ -660,6 +723,20 @@ export async function addTechToAppointment(
       notes: source.notes,
       travelMinutes: source.travelMinutes,
       status: 'SCHEDULED',
+    },
+  })
+
+  await emit({
+    type: EVENT_TYPES.APPOINTMENT_SCHEDULED,
+    entityType: 'appointment',
+    entityId: appt.id,
+    actorId: userId,
+    payload: {
+      ticketId: source.ticketId,
+      technicianId,
+      scheduledStart: source.scheduledStart.toISOString(),
+      scheduledEnd: source.scheduledEnd.toISOString(),
+      viaAddTechToAppointment: true,
     },
   })
 

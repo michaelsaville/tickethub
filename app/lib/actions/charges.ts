@@ -6,6 +6,8 @@ import type { TH_ChargeStatus, TH_ChargeType } from '@prisma/client'
 import { prisma } from '@/app/lib/prisma'
 import { authOptions } from '@/app/lib/auth'
 import { resolveUnitPrice } from '@/app/lib/billing'
+import { emit } from '@/app/lib/automation/bus'
+import { EVENT_TYPES } from '@/app/lib/automation/events'
 
 export type ChargeResult = { ok: true } | { ok: false; error: string }
 
@@ -149,7 +151,7 @@ export async function createCharge(
             select: { type: true },
           })
 
-    await prisma.$transaction(async (tx) => {
+    const createdChargeId = await prisma.$transaction(async (tx) => {
       const charge = await tx.tH_Charge.create({
         data: {
           ticketId,
@@ -194,6 +196,28 @@ export async function createCharge(
           },
         },
       })
+      return charge.id
+    })
+
+    await emit({
+      type: EVENT_TYPES.CHARGE_ADDED,
+      entityType: 'charge',
+      entityId: createdChargeId,
+      actorId: userId,
+      payload: {
+        ticketId,
+        contractId,
+        contractType: resolvedContract?.type ?? null,
+        chargeType,
+        itemId: item.id,
+        itemName: item.name,
+        quantity,
+        unitPriceCents: unitPrice,
+        totalPriceCents: totalPrice,
+        timeSpentMinutes,
+        timeChargedMinutes,
+        billable: true,
+      },
     })
 
     revalidatePath(`/tickets/${ticketId}`)
@@ -268,6 +292,22 @@ export async function updateChargeStatus(
         })
       }
     })
+
+    if (wasBillable !== willBeBillable) {
+      await emit({
+        type: EVENT_TYPES.CHARGE_BILLABLE_TOGGLED,
+        entityType: 'charge',
+        entityId: chargeId,
+        actorId: userId,
+        payload: {
+          ticketId: current.ticketId,
+          fromStatus: current.status,
+          toStatus: status,
+          billable: willBeBillable,
+          blockHoursDelta,
+        },
+      })
+    }
 
     if (current.ticketId) revalidatePath(`/tickets/${current.ticketId}`)
     return { ok: true }

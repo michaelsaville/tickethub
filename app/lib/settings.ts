@@ -102,6 +102,9 @@ export async function getConfig(key: string): Promise<string> {
  */
 const AUTOMATION_DEFAULTS: Record<string, boolean> = {
   'onsite_workflow.enabled': true,
+  /// Phase 0 automation engine event emission. When OFF, emit() is a no-op.
+  /// Keep OFF in production until the Phase 1 evaluator has been verified.
+  'automation.engine.emit': false,
 }
 
 export async function isAutomationEnabled(flag: keyof typeof AUTOMATION_DEFAULTS): Promise<boolean> {

@@ -2,6 +2,8 @@ import { NextResponse, type NextRequest } from 'next/server'
 import Stripe from 'stripe'
 import { prisma } from '@/app/lib/prisma'
 import { stripe, stripeConfigured, deactivatePaymentLink } from '@/app/lib/stripe'
+import { emit } from '@/app/lib/automation/bus'
+import { EVENT_TYPES } from '@/app/lib/automation/events'
 
 export const dynamic = 'force-dynamic'
 
@@ -81,6 +83,19 @@ export async function POST(req: NextRequest) {
       // DB write that actually matters.
       void deactivatePaymentLink(invoice.stripePaymentLinkId)
 
+      await emit({
+        type: EVENT_TYPES.INVOICE_PAID,
+        entityType: 'invoice',
+        entityId: invoice.id,
+        actorId: null,
+        payload: {
+          from: invoice.status,
+          to: 'PAID',
+          via: 'STRIPE_LINK',
+          stripeSessionId: session.id,
+        },
+      })
+
       console.log('[webhook/stripe] invoice paid', invoice.id, session.id)
       break
     }
@@ -102,6 +117,19 @@ export async function POST(req: NextRequest) {
       // Kill any stale Payment Link so it can't be redeemed after we've
       // already collected via saved card.
       void deactivatePaymentLink(invoice.stripePaymentLinkId)
+
+      await emit({
+        type: EVENT_TYPES.INVOICE_PAID,
+        entityType: 'invoice',
+        entityId: invoice.id,
+        actorId: null,
+        payload: {
+          from: invoice.status,
+          to: 'PAID',
+          via: 'SAVED_CARD',
+          stripePaymentIntentId: pi.id,
+        },
+      })
       break
     }
     default:

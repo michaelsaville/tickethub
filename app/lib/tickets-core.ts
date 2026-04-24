@@ -8,6 +8,8 @@ import { isPausingStatus } from '@/app/lib/sla'
 import { computeSlaDates } from '@/app/lib/sla-server'
 import { notifyAdmins, notifyUser, ticketUrl } from '@/app/lib/notify-server'
 import { sendTicketClientEmail } from '@/app/lib/ticket-email'
+import { emit } from '@/app/lib/automation/bus'
+import { EVENT_TYPES } from '@/app/lib/automation/events'
 
 /**
  * Core ticket mutations shared between server actions and REST routes.
@@ -153,6 +155,31 @@ export async function createTicketCore(
       })
     }
 
+    await emit({
+      type: EVENT_TYPES.TICKET_CREATED,
+      entityType: 'ticket',
+      entityId: ticket.id,
+      actorId: createdById,
+      payload: {
+        clientId,
+        contractId,
+        priority,
+        ticketType: type,
+        status: assignedToId ? 'OPEN' : 'NEW',
+        assigneeId: assignedToId,
+        recurringTemplateId,
+      },
+    })
+    if (assignedToId) {
+      await emit({
+        type: EVENT_TYPES.TICKET_ASSIGNED,
+        entityType: 'ticket',
+        entityId: ticket.id,
+        actorId: createdById,
+        payload: { assigneeId: assignedToId, previousAssigneeId: null },
+      })
+    }
+
     return { ok: true, ticketId: ticket.id, ticketNumber: ticket.ticketNumber }
   } catch (e) {
     console.error('[tickets-core] createTicketCore failed', e)
@@ -166,7 +193,7 @@ export async function updateTicketStatusCore(
   status: TH_TicketStatus,
 ): Promise<{ ok: boolean; error?: string }> {
   try {
-    await prisma.$transaction(async (tx) => {
+    const result = await prisma.$transaction(async (tx) => {
       const current = await tx.tH_Ticket.findUnique({
         where: { id: ticketId },
         select: {
@@ -177,7 +204,7 @@ export async function updateTicketStatusCore(
         },
       })
       if (!current) throw new Error('Not found')
-      if (current.status === status) return
+      if (current.status === status) return { changed: false as const }
 
       const now = new Date()
       const wasPaused = current.slaPausedAt !== null
@@ -226,7 +253,30 @@ export async function updateTicketStatusCore(
           },
         },
       })
+
+      return {
+        changed: true as const,
+        from: current.status,
+        to: status,
+        slaPaused: slaPausedAt === now,
+        slaResumed: slaPausedAt === null && wasPaused,
+      }
     })
+
+    if (result.changed) {
+      await emit({
+        type: EVENT_TYPES.TICKET_STATUS_CHANGED,
+        entityType: 'ticket',
+        entityId: ticketId,
+        actorId: userId,
+        payload: {
+          from: result.from,
+          to: result.to,
+          slaPaused: result.slaPaused,
+          slaResumed: result.slaResumed,
+        },
+      })
+    }
     return { ok: true }
   } catch (e) {
     console.error('[tickets-core] updateStatus failed', e)

@@ -1,5 +1,7 @@
 import { NextResponse } from 'next/server'
 import { prisma } from '@/app/lib/prisma'
+import { emit } from '@/app/lib/automation/bus'
+import { EVENT_TYPES } from '@/app/lib/automation/events'
 
 // POST /api/estimates/[id]/respond — customer approve/decline (portal token auth)
 export async function POST(
@@ -58,6 +60,21 @@ export async function POST(
     where: { source: 'TICKETHUB_ESTIMATE', externalRef: id, status: 'ACTIVE' },
     data: { status: 'ACKNOWLEDGED', acknowledgedAt: new Date() },
   }).catch(() => {})
+
+  await emit({
+    type:
+      action === 'approve'
+        ? EVENT_TYPES.ESTIMATE_APPROVED
+        : EVENT_TYPES.ESTIMATE_DECLINED,
+    entityType: 'estimate',
+    entityId: id,
+    actorId: null,
+    payload: {
+      clientId: estimate.clientId,
+      viaPortal: true,
+      contactId: portalToken.contact.clientId ? portalToken.contactId : null,
+    },
+  })
 
   return NextResponse.json({ success: true, status: action === 'approve' ? 'APPROVED' : 'DECLINED' })
 }

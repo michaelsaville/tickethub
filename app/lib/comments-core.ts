@@ -1,5 +1,7 @@
 import { prisma } from '@/app/lib/prisma'
 import { notifyUser, ticketUrl } from '@/app/lib/notify-server'
+import { emit } from '@/app/lib/automation/bus'
+import { EVENT_TYPES } from '@/app/lib/automation/events'
 
 /**
  * Core comment creation logic shared between the `addComment` server action
@@ -61,6 +63,14 @@ export async function createComment(
         category: 'COMMENT',
       })
     }
+
+    await emit({
+      type: EVENT_TYPES.TICKET_COMMENT_ADDED,
+      entityType: 'ticket',
+      entityId: ticketId,
+      actorId: userId,
+      payload: { isInternal, bodyLength: trimmed.length },
+    })
 
     return { ok: true }
   } catch (e) {

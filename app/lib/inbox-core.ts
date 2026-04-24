@@ -4,6 +4,8 @@ import { createComment } from '@/app/lib/comments-core'
 import { createTicketCore } from '@/app/lib/tickets-core'
 import { notifyUser, ticketUrl } from '@/app/lib/notify-server'
 import { classifyReplyIntent } from '@/app/lib/ai-thankyou'
+import { emit } from '@/app/lib/automation/bus'
+import { EVENT_TYPES } from '@/app/lib/automation/events'
 
 /**
  * Inbound-email pipeline. Called once per message after the M365 Graph
@@ -476,6 +478,20 @@ export async function processInboundEmail(
             status: 'APPROVED',
             matchedTicketId: res.ticketId,
             handledAt: new Date(),
+          },
+        })
+        await emit({
+          type: EVENT_TYPES.TICKET_CREATED_FROM_INBOUND,
+          entityType: 'ticket',
+          entityId: res.ticketId,
+          actorId: null,
+          payload: {
+            clientId: contactMatch.clientId,
+            contactName: contactMatch.contactName ?? null,
+            fromEmail: email.fromEmail,
+            graphMessageId: email.graphMessageId,
+            aiPriority,
+            aiType,
           },
         })
         return { action: 'autoCreated', ticketId: res.ticketId }

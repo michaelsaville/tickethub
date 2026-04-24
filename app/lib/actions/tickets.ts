@@ -15,6 +15,8 @@ import { notifyAdmins, notifyUser, ticketUrl } from '@/app/lib/notify-server'
 import { createComment } from '@/app/lib/comments-core'
 import { updateTicketStatusCore } from '@/app/lib/tickets-core'
 import { sendTicketClientEmail } from '@/app/lib/ticket-email'
+import { emit } from '@/app/lib/automation/bus'
+import { EVENT_TYPES } from '@/app/lib/automation/events'
 
 async function getUserId(): Promise<string | null> {
   const session = await getServerSession(authOptions)
@@ -135,6 +137,30 @@ export async function createTicket(
       messageText: description ?? ticket.title,
     })
 
+    await emit({
+      type: EVENT_TYPES.TICKET_CREATED,
+      entityType: 'ticket',
+      entityId: ticket.id,
+      actorId: userId,
+      payload: {
+        clientId,
+        contractId: globalContract?.id ?? null,
+        priority,
+        ticketType: type,
+        status: assignedToId ? 'OPEN' : 'NEW',
+        assigneeId: assignedToId,
+      },
+    })
+    if (assignedToId) {
+      await emit({
+        type: EVENT_TYPES.TICKET_ASSIGNED,
+        entityType: 'ticket',
+        entityId: ticket.id,
+        actorId: userId,
+        payload: { assigneeId: assignedToId, previousAssigneeId: null },
+      })
+    }
+
     revalidatePath('/tickets')
     revalidatePath(`/clients/${clientId}`)
     redirect(`/tickets/${ticket.id}`)
@@ -187,13 +213,15 @@ export async function assignTicket(
   const userId = await getUserId()
   if (!userId) return { ok: false, error: 'Unauthorized' }
   try {
-    await prisma.$transaction(async (tx) => {
+    const result = await prisma.$transaction(async (tx) => {
       const current = await tx.tH_Ticket.findUnique({
         where: { id: ticketId },
         select: { assignedToId: true, status: true },
       })
       if (!current) throw new Error('Not found')
-      if (current.assignedToId === assignedToId) return
+      if (current.assignedToId === assignedToId) {
+        return { changed: false as const }
+      }
       await tx.tH_Ticket.update({
         where: { id: ticketId },
         data: {
@@ -211,7 +239,23 @@ export async function assignTicket(
           data: { from: current.assignedToId, to: assignedToId },
         },
       })
+      return { changed: true as const, from: current.assignedToId }
     })
+
+    if (result.changed) {
+      await emit({
+        type: assignedToId
+          ? EVENT_TYPES.TICKET_ASSIGNED
+          : EVENT_TYPES.TICKET_UNASSIGNED,
+        entityType: 'ticket',
+        entityId: ticketId,
+        actorId: userId,
+        payload: {
+          assigneeId: assignedToId,
+          previousAssigneeId: result.from,
+        },
+      })
+    }
 
     // Notify the newly-assigned tech (if it's not the person making the
     // assignment). Fetch ticket metadata after the tx commits.
@@ -282,6 +326,13 @@ export async function updateTicketContract(
         },
       }),
     ])
+    await emit({
+      type: EVENT_TYPES.TICKET_CONTRACT_CHANGED,
+      entityType: 'ticket',
+      entityId: ticketId,
+      actorId: userId,
+      payload: { from: ticket.contractId, to: contractId },
+    })
     revalidatePath(`/tickets/${ticketId}`)
     return { ok: true }
   } catch (e) {
@@ -318,6 +369,13 @@ export async function updateTicketBoard(
         },
       }),
     ])
+    await emit({
+      type: EVENT_TYPES.TICKET_BOARD_CHANGED,
+      entityType: 'ticket',
+      entityId: ticketId,
+      actorId: userId,
+      payload: { from: current.board, to: next },
+    })
     revalidatePath(`/tickets/${ticketId}`)
     revalidatePath('/tickets')
     revalidatePath('/schedule')
@@ -355,6 +413,13 @@ export async function updateTicketPriority(
         },
       }),
     ])
+    await emit({
+      type: EVENT_TYPES.TICKET_PRIORITY_CHANGED,
+      entityType: 'ticket',
+      entityId: ticketId,
+      actorId: userId,
+      payload: { from: current.priority, to: priority },
+    })
     revalidatePath(`/tickets/${ticketId}`)
     revalidatePath('/tickets')
     return { ok: true }

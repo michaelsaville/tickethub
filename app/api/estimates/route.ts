@@ -3,6 +3,8 @@ import { prisma } from '@/app/lib/prisma'
 import { requireAuth } from '@/app/lib/api-auth'
 import { rateForStateAsync } from '@/app/lib/tax-server'
 import { computeTax } from '@/app/lib/tax'
+import { emit } from '@/app/lib/automation/bus'
+import { EVENT_TYPES } from '@/app/lib/automation/events'
 
 // GET /api/estimates — list all estimates (optionally filter by clientId)
 export async function GET(req: Request) {
@@ -27,7 +29,7 @@ export async function GET(req: Request) {
 
 // POST /api/estimates — create a new estimate
 export async function POST(req: Request) {
-  const { error } = await requireAuth()
+  const { session, error } = await requireAuth()
   if (error) return error
 
   const body = await req.json()
@@ -102,6 +104,20 @@ export async function POST(req: Request) {
       client: { select: { id: true, name: true } },
       contact: { select: { id: true, firstName: true, lastName: true } },
       items: { include: { item: { select: { id: true, name: true, type: true } } }, orderBy: { sortOrder: 'asc' } },
+    },
+  })
+
+  await emit({
+    type: EVENT_TYPES.ESTIMATE_CREATED,
+    entityType: 'estimate',
+    entityId: estimate.id,
+    actorId: session?.user?.id,
+    payload: {
+      clientId,
+      contactId: contactId || null,
+      contractId: contractId || null,
+      totalAmount: estimate.totalAmount,
+      itemCount: estimate.items.length,
     },
   })
 

@@ -1,6 +1,8 @@
 import { NextResponse, type NextRequest } from 'next/server'
 import { prisma } from '@/app/lib/prisma'
 import { notifyTeam, ticketUrl } from '@/app/lib/notify-server'
+import { emit } from '@/app/lib/automation/bus'
+import { EVENT_TYPES } from '@/app/lib/automation/events'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
@@ -96,6 +98,18 @@ export async function GET(req: NextRequest) {
       data: {
         slaLastNotifiedBps: crossed.bps,
         ...(crossed.bps >= 100 ? { slaBreached: true } : {}),
+      },
+    })
+    await emit({
+      type: EVENT_TYPES.TICKET_SLA_THRESHOLD_CROSSED,
+      entityType: 'ticket',
+      entityId: t.id,
+      actorId: null,
+      payload: {
+        level: crossed.bps,
+        thresholdLabel: crossed.label,
+        priority: t.priority,
+        targetType: 'RESOLVE',
       },
     })
     fired.push({ ticketId: t.id, threshold: crossed.bps })

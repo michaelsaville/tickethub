@@ -1,6 +1,8 @@
 import { NextResponse } from "next/server"
 import { prisma } from "@/app/lib/prisma"
 import { verifyPortalHmac } from "@/app/lib/bff-hmac"
+import { emit } from "@/app/lib/automation/bus"
+import { EVENT_TYPES } from "@/app/lib/automation/events"
 
 export const dynamic = "force-dynamic"
 
@@ -64,6 +66,23 @@ export async function POST(req: Request) {
       notes: combinedNotes,
     },
     select: { id: true, status: true, approvedAt: true, declinedAt: true },
+  })
+
+  await emit({
+    type:
+      payload.action === "approve"
+        ? EVENT_TYPES.ESTIMATE_APPROVED
+        : EVENT_TYPES.ESTIMATE_DECLINED,
+    entityType: "estimate",
+    entityId: estimate.id,
+    actorId: null,
+    payload: {
+      clientId: client.id,
+      viaPortal: true,
+      portalAuthorEmail: payload.authorEmail,
+      portalAuthorName: payload.authorName || null,
+      note: payload.note || null,
+    },
   })
 
   return NextResponse.json({ ok: true, estimate: updated })

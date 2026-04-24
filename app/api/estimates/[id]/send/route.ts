@@ -2,13 +2,15 @@ import { NextResponse } from 'next/server'
 import { prisma } from '@/app/lib/prisma'
 import { requireAuth } from '@/app/lib/api-auth'
 import { sendEstimateEmail } from '@/app/lib/actions/estimates'
+import { emit } from '@/app/lib/automation/bus'
+import { EVENT_TYPES } from '@/app/lib/automation/events'
 
 // POST /api/estimates/[id]/send — send estimate to client
 export async function POST(
   req: Request,
   { params }: { params: Promise<{ id: string }> }
 ) {
-  const { error } = await requireAuth()
+  const { session, error } = await requireAuth()
   if (error) return error
   const { id } = await params
 
@@ -58,6 +60,18 @@ export async function POST(
 
   // Send email (fire and forget)
   await sendEstimateEmail(estimate).catch(e => console.error('Estimate email failed:', e))
+
+  await emit({
+    type: EVENT_TYPES.ESTIMATE_SENT,
+    entityType: 'estimate',
+    entityId: id,
+    actorId: session?.user?.id,
+    payload: {
+      clientId: estimate.clientId,
+      contactId: estimate.contactId,
+      totalAmount: estimate.totalAmount,
+    },
+  })
 
   return NextResponse.json({ success: true })
 }

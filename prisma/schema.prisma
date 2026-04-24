@@ -20,39 +20,39 @@ datasource db {
 // ─── CLIENTS ──────────────────────────────────────────────────────────────
 
 model TH_Client {
-  id            String   @id @default(cuid())
-  name          String
-  shortCode     String?  @unique
-  internalNotes String?
+  id                        String   @id @default(cuid())
+  name                      String
+  shortCode                 String?  @unique
+  internalNotes             String?
   /// ISO 3166-2 US state code (WV/MD/PA/…) — determines sales tax rate
   /// at invoice time. Frozen onto TH_Invoice.taxState at invoice creation
   /// so historical invoices survive rate changes.
-  billingState  String?
+  billingState              String?
   /// Direct billing email for invoices — overrides the primary contact
   /// email when set. Useful when a client has an ap@ / billing@ mailbox
   /// separate from the person you talk to day to day.
-  billingEmail  String?
+  billingEmail              String?
   /// Per-client opt-out for automated ticket emails (new ticket opened,
   /// public reply added). Master kill switch is `TICKETHUB_CLIENT_EMAILS_ENABLED`
   /// env var — this flag only matters when the env is ON.
-  emailClientOnTicketEvents Boolean @default(true)
-  syncroId      Int?     @unique // Syncro customer ID for migration dedup
-  qboCustomerId String?           // cached QBO customer ID for invoice sync
+  emailClientOnTicketEvents Boolean  @default(true)
+  syncroId                  Int?     @unique // Syncro customer ID for migration dedup
+  qboCustomerId             String? // cached QBO customer ID for invoice sync
   /// Stripe Customer object — created lazily on first saved-card add.
   /// Null for clients we've never had to store a payment method for.
-  stripeCustomerId String? @unique
-  isActive      Boolean  @default(true)
-  createdAt     DateTime @default(now())
-  updatedAt     DateTime @updatedAt
+  stripeCustomerId          String?  @unique
+  isActive                  Boolean  @default(true)
+  createdAt                 DateTime @default(now())
+  updatedAt                 DateTime @updatedAt
 
-  contacts  TH_Contact[]
-  sites     TH_Site[]
-  contracts TH_Contract[]
-  tickets   TH_Ticket[]
-  assets    TH_Asset[]
-  invoices  TH_Invoice[]
-  estimates TH_Estimate[]
-  savedPaymentMethods TH_SavedPaymentMethod[]
+  contacts                 TH_Contact[]
+  sites                    TH_Site[]
+  contracts                TH_Contract[]
+  tickets                  TH_Ticket[]
+  assets                   TH_Asset[]
+  invoices                 TH_Invoice[]
+  estimates                TH_Estimate[]
+  savedPaymentMethods      TH_SavedPaymentMethod[]
   recurringTicketTemplates TH_RecurringTicketTemplate[]
 
   @@map("th_clients")
@@ -60,24 +60,24 @@ model TH_Client {
 }
 
 model TH_Contact {
-  id        String   @id @default(cuid())
-  clientId  String
-  client    TH_Client @relation(fields: [clientId], references: [id])
-  firstName String
-  lastName  String
-  email     String?
-  phone     String?
-  jobTitle  String?
-  isPrimary      Boolean  @default(false)
-  syncroContactId Int?    @unique // Syncro contact ID for migration dedup
-  isActive       Boolean  @default(true)
-  createdAt      DateTime @default(now())
-  updatedAt      DateTime @updatedAt
+  id              String    @id @default(cuid())
+  clientId        String
+  client          TH_Client @relation(fields: [clientId], references: [id])
+  firstName       String
+  lastName        String
+  email           String?
+  phone           String?
+  jobTitle        String?
+  isPrimary       Boolean   @default(false)
+  syncroContactId Int?      @unique // Syncro contact ID for migration dedup
+  isActive        Boolean   @default(true)
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
 
-  tickets       TH_Ticket[]
-  reminders     TH_Reminder[]
-  portalTokens  TH_ContactPortalToken[]
-  estimates     TH_Estimate[]
+  tickets                  TH_Ticket[]
+  reminders                TH_Reminder[]
+  portalTokens             TH_ContactPortalToken[]
+  estimates                TH_Estimate[]
   recurringTicketTemplates TH_RecurringTicketTemplate[]
 
   @@map("th_contacts")
@@ -85,24 +85,24 @@ model TH_Contact {
 }
 
 model TH_Site {
-  id        String   @id @default(cuid())
-  clientId  String
-  client    TH_Client @relation(fields: [clientId], references: [id])
-  name      String
-  address   String?
-  city      String?
-  state     String?
-  zip       String?
-  country   String   @default("US")
-  latitude  Float?
-  longitude Float?
-  syncroSiteId Int? @unique // Syncro service address ID for migration dedup
-  notes     String?
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  id           String    @id @default(cuid())
+  clientId     String
+  client       TH_Client @relation(fields: [clientId], references: [id])
+  name         String
+  address      String?
+  city         String?
+  state        String?
+  zip          String?
+  country      String    @default("US")
+  latitude     Float?
+  longitude    Float?
+  syncroSiteId Int?      @unique // Syncro service address ID for migration dedup
+  notes        String?
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
 
-  tickets        TH_Ticket[]
-  stoppingPoints TH_StoppingPoint[]
+  tickets                  TH_Ticket[]
+  stoppingPoints           TH_StoppingPoint[]
   recurringTicketTemplates TH_RecurringTicketTemplate[]
 
   @@map("th_sites")
@@ -117,6 +117,7 @@ enum TH_ContractType {
   RECURRING
   TIME_AND_MATERIAL
   PROJECT
+
   @@schema("tickethub")
 }
 
@@ -125,43 +126,44 @@ enum TH_ContractStatus {
   EXPIRED
   CANCELLED
   PENDING
+
   @@schema("tickethub")
 }
 
 model TH_Contract {
-  id             String            @id @default(cuid())
-  clientId       String
-  client         TH_Client         @relation(fields: [clientId], references: [id])
-  name           String
-  type           TH_ContractType   @default(GLOBAL)
-  status         TH_ContractStatus @default(ACTIVE)
-  startDate      DateTime?
-  endDate        DateTime?
-  monthlyFee     Int?
-  blockHours     Float?
-  blockHoursUsed Float             @default(0)
-  notes          String?
-  isGlobal       Boolean           @default(false)
+  id                 String            @id @default(cuid())
+  clientId           String
+  client             TH_Client         @relation(fields: [clientId], references: [id])
+  name               String
+  type               TH_ContractType   @default(GLOBAL)
+  status             TH_ContractStatus @default(ACTIVE)
+  startDate          DateTime?
+  endDate            DateTime?
+  monthlyFee         Int?
+  blockHours         Float?
+  blockHoursUsed     Float             @default(0)
+  notes              String?
+  isGlobal           Boolean           @default(false)
   /// Auto-generate a DRAFT invoice each month for `monthlyFee`. Requires
   /// `type=RECURRING` + `status=ACTIVE` + `monthlyFee > 0`.
-  autoInvoiceEnabled Boolean    @default(false)
+  autoInvoiceEnabled Boolean           @default(false)
   /// Auto-send the generated invoice (DRAFT → SENT via sendInvoiceEmail).
   /// Requires autoInvoiceEnabled. Off by default — admins review drafts.
-  autoSendInvoice    Boolean    @default(false)
+  autoSendInvoice    Boolean           @default(false)
   /// Day of the month (1–28) to fire the auto-invoice. Clamped to 28 to
   /// sidestep Feb edge cases.
-  billingDayOfMonth  Int?       @default(1)
+  billingDayOfMonth  Int?              @default(1)
   /// Audit + idempotency anchor for the auto-invoice cron — set after a
   /// successful auto-invoice. Cron skips when this is in the current
   /// calendar month (America/New_York).
   lastAutoInvoicedAt DateTime?
-  createdAt      DateTime          @default(now())
-  updatedAt      DateTime          @updatedAt
+  createdAt          DateTime          @default(now())
+  updatedAt          DateTime          @updatedAt
 
-  priceExceptions TH_ContractPriceException[]
-  charges         TH_Charge[]
-  tickets         TH_Ticket[]
-  estimates       TH_Estimate[]
+  priceExceptions          TH_ContractPriceException[]
+  charges                  TH_Charge[]
+  tickets                  TH_Ticket[]
+  estimates                TH_Estimate[]
   recurringTicketTemplates TH_RecurringTicketTemplate[]
 
   @@map("th_contracts")
@@ -189,6 +191,7 @@ enum TH_ItemType {
   EXPENSE
   LICENSE
   CONTRACT_FEE
+
   @@schema("tickethub")
 }
 
@@ -220,6 +223,7 @@ enum TH_ChargeStatus {
   BILLABLE
   INVOICED
   LOCKED
+
   @@schema("tickethub")
 }
 
@@ -228,21 +232,22 @@ enum TH_ChargeType {
   PART
   EXPENSE
   CONTRACT_FEE
+
   @@schema("tickethub")
 }
 
 model TH_Charge {
-  id           String          @id @default(cuid())
+  id           String      @id @default(cuid())
   ticketId     String?
-  ticket       TH_Ticket?      @relation(fields: [ticketId], references: [id])
+  ticket       TH_Ticket?  @relation(fields: [ticketId], references: [id])
   contractId   String
-  contract     TH_Contract     @relation(fields: [contractId], references: [id])
+  contract     TH_Contract @relation(fields: [contractId], references: [id])
   itemId       String
-  item         TH_Item         @relation(fields: [itemId], references: [id])
+  item         TH_Item     @relation(fields: [itemId], references: [id])
   technicianId String?
-  technician   TH_User?        @relation(fields: [technicianId], references: [id])
+  technician   TH_User?    @relation(fields: [technicianId], references: [id])
   invoiceId    String?
-  invoice      TH_Invoice?     @relation(fields: [invoiceId], references: [id])
+  invoice      TH_Invoice? @relation(fields: [invoiceId], references: [id])
 
   type        TH_ChargeType
   status      TH_ChargeStatus @default(BILLABLE)
@@ -283,6 +288,7 @@ enum TH_TicketStatus {
   RESOLVED
   CLOSED
   CANCELLED
+
   @@schema("tickethub")
 }
 
@@ -291,6 +297,7 @@ enum TH_TicketPriority {
   HIGH
   MEDIUM
   LOW
+
   @@schema("tickethub")
 }
 
@@ -301,30 +308,31 @@ enum TH_TicketType {
   CHANGE
   MAINTENANCE
   INTERNAL
+
   @@schema("tickethub")
 }
 
 model TH_Ticket {
-  id           String       @id @default(cuid())
-  ticketNumber Int          @unique @default(autoincrement())
-  clientId     String
-  client       TH_Client    @relation(fields: [clientId], references: [id])
-  contactId    String?
-  contact      TH_Contact?  @relation(fields: [contactId], references: [id])
-  siteId       String?
-  site         TH_Site?     @relation(fields: [siteId], references: [id])
-  contractId   String?
-  contract     TH_Contract? @relation(fields: [contractId], references: [id])
-  assetId      String?
-  asset        TH_Asset?    @relation(fields: [assetId], references: [id])
+  id              String       @id @default(cuid())
+  ticketNumber    Int          @unique @default(autoincrement())
+  clientId        String
+  client          TH_Client    @relation(fields: [clientId], references: [id])
+  contactId       String?
+  contact         TH_Contact?  @relation(fields: [contactId], references: [id])
+  siteId          String?
+  site            TH_Site?     @relation(fields: [siteId], references: [id])
+  contractId      String?
+  contract        TH_Contract? @relation(fields: [contractId], references: [id])
+  assetId         String?
+  asset           TH_Asset?    @relation(fields: [assetId], references: [id])
   // Cross-app link to DocHub asset (public schema). Not a FK — just stores
   // the DocHub Asset.id so the UI can render a link to dochub.pcc2k.com/assets/:id
   dochubAssetId   String?
-  dochubAssetName String?   // cached display name to avoid cross-schema query on every load
-  assignedToId String?
-  assignedTo   TH_User?     @relation("AssignedTickets", fields: [assignedToId], references: [id])
-  createdById  String
-  createdBy    TH_User      @relation("CreatedTickets", fields: [createdById], references: [id])
+  dochubAssetName String? // cached display name to avoid cross-schema query on every load
+  assignedToId    String?
+  assignedTo      TH_User?     @relation("AssignedTickets", fields: [assignedToId], references: [id])
+  createdById     String
+  createdBy       TH_User      @relation("CreatedTickets", fields: [createdById], references: [id])
 
   title       String
   description String?
@@ -333,14 +341,14 @@ model TH_Ticket {
   type        TH_TicketType     @default(INCIDENT)
   board       String?
 
-  slaResponseDue      DateTime?
-  slaResolveDue       DateTime?
-  slaBreached         Boolean   @default(false)
-  slaPausedAt         DateTime?
+  slaResponseDue     DateTime?
+  slaResolveDue      DateTime?
+  slaBreached        Boolean   @default(false)
+  slaPausedAt        DateTime?
   /// Highest SLA elapsed threshold already notified on, in percent
   /// (0 = none, 50 = gentle, 75 = urgent, 90 = critical, 100 = breached).
   /// Ensures the escalation cron only fires once per threshold per ticket.
-  slaLastNotifiedBps  Int       @default(0)
+  slaLastNotifiedBps Int       @default(0)
 
   isUnread        Boolean   @default(false)
   lastClientReply DateTime?
@@ -349,7 +357,7 @@ model TH_Ticket {
 
   checklist Json?
 
-  syncroId  Int?      @unique // Syncro ticket ID for migration dedup
+  syncroId Int? @unique // Syncro ticket ID for migration dedup
 
   closedAt  DateTime?
   deletedAt DateTime?
@@ -425,6 +433,7 @@ enum TH_PartStatus {
   RECEIVED
   INSTALLED
   RETURNED
+
   @@schema("tickethub")
 }
 
@@ -491,6 +500,7 @@ enum TH_InvoiceStatus {
   PAID
   OVERDUE
   VOID
+
   @@schema("tickethub")
 }
 
@@ -507,8 +517,8 @@ model TH_Invoice {
 
   subtotal        Int
   taxableSubtotal Int     @default(0) // cents — portion of subtotal that was taxed
-  taxState        String?              // frozen from client.billingState
-  taxRate         Int     @default(0)  // basis points (600 = 6.00%)
+  taxState        String? // frozen from client.billingState
+  taxRate         Int     @default(0) // basis points (600 = 6.00%)
   taxAmount       Int     @default(0)
   totalAmount     Int
 
@@ -525,9 +535,9 @@ model TH_Invoice {
   // invoice is marked PAID. stripePaymentIntentId is populated when
   // Stripe's checkout.session.completed webhook fires and lets us
   // cross-reference the ledger side later.
-  stripePaymentLinkId     String?
-  stripePaymentLinkUrl    String?
-  stripePaymentIntentId   String?
+  stripePaymentLinkId   String?
+  stripePaymentLinkUrl  String?
+  stripePaymentIntentId String?
 
   deletedAt DateTime?
   createdAt DateTime  @default(now())
@@ -549,18 +559,19 @@ enum TH_EstimateStatus {
   DECLINED
   EXPIRED
   CONVERTED
+
   @@schema("tickethub")
 }
 
 model TH_Estimate {
-  id              String             @id @default(cuid())
-  estimateNumber  Int                @unique @default(autoincrement())
-  clientId        String
-  client          TH_Client          @relation(fields: [clientId], references: [id])
-  contactId       String?
-  contact         TH_Contact?        @relation(fields: [contactId], references: [id])
-  contractId      String?
-  contract        TH_Contract?       @relation(fields: [contractId], references: [id])
+  id             String       @id @default(cuid())
+  estimateNumber Int          @unique @default(autoincrement())
+  clientId       String
+  client         TH_Client    @relation(fields: [clientId], references: [id])
+  contactId      String?
+  contact        TH_Contact?  @relation(fields: [contactId], references: [id])
+  contractId     String?
+  contract       TH_Contract? @relation(fields: [contractId], references: [id])
 
   status      TH_EstimateStatus @default(DRAFT)
   title       String
@@ -573,8 +584,8 @@ model TH_Estimate {
   taxAmount       Int     @default(0)
   totalAmount     Int     @default(0)
 
-  validUntil  DateTime?
-  notes       String?
+  validUntil DateTime?
+  notes      String?
 
   externalRef String? // Syncro estimate ID for imported estimates
 
@@ -595,18 +606,18 @@ model TH_Estimate {
 }
 
 model TH_EstimateItem {
-  id          String      @id @default(cuid())
-  estimateId  String
-  estimate    TH_Estimate @relation(fields: [estimateId], references: [id], onDelete: Cascade)
-  itemId      String
-  item        TH_Item     @relation(fields: [itemId], references: [id])
+  id         String      @id @default(cuid())
+  estimateId String
+  estimate   TH_Estimate @relation(fields: [estimateId], references: [id], onDelete: Cascade)
+  itemId     String
+  item       TH_Item     @relation(fields: [itemId], references: [id])
 
   description String?
-  quantity    Float       @default(1)
-  unitPrice   Int         // cents
-  totalPrice  Int         // cents (quantity × unitPrice)
+  quantity    Float   @default(1)
+  unitPrice   Int // cents
+  totalPrice  Int // cents (quantity × unitPrice)
 
-  sortOrder   Int         @default(0)
+  sortOrder Int @default(0)
 
   createdAt DateTime @default(now())
 
@@ -659,13 +670,13 @@ enum TH_AppointmentStatus {
 }
 
 model TH_Appointment {
-  id             String    @id @default(cuid())
-  ticketId       String
-  ticket         TH_Ticket @relation(fields: [ticketId], references: [id])
-  technicianId   String
-  technician     TH_User   @relation("TechAppointments", fields: [technicianId], references: [id])
-  createdById    String
-  createdBy      TH_User   @relation("CreatedAppointments", fields: [createdById], references: [id])
+  id           String    @id @default(cuid())
+  ticketId     String
+  ticket       TH_Ticket @relation(fields: [ticketId], references: [id])
+  technicianId String
+  technician   TH_User   @relation("TechAppointments", fields: [technicianId], references: [id])
+  createdById  String
+  createdBy    TH_User   @relation("CreatedAppointments", fields: [createdById], references: [id])
 
   scheduledStart DateTime
   scheduledEnd   DateTime
@@ -677,8 +688,8 @@ model TH_Appointment {
   status TH_AppointmentStatus @default(SCHEDULED)
 
   // Link to charge created on completion
-  chargeId String?     @unique
-  charge   TH_Charge?  @relation(fields: [chargeId], references: [id])
+  chargeId String?    @unique
+  charge   TH_Charge? @relation(fields: [chargeId], references: [id])
 
   /// Set when a staff member triggered the on-site confirmation email
   /// from the dispatch board. Drives the sent/unsent indicator on the
@@ -698,9 +709,9 @@ model TH_WorkingHours {
   id           String  @id @default(cuid())
   userId       String
   user         TH_User @relation(fields: [userId], references: [id])
-  dayOfWeek    Int     // 0=Sun, 1=Mon, ..., 6=Sat
-  startTime    String  // "08:00" (HH:mm)
-  endTime      String  // "17:00" (HH:mm)
+  dayOfWeek    Int // 0=Sun, 1=Mon, ..., 6=Sat
+  startTime    String // "08:00" (HH:mm)
+  endTime      String // "17:00" (HH:mm)
   isWorkingDay Boolean @default(true)
 
   @@unique([userId, dayOfWeek])
@@ -711,24 +722,24 @@ model TH_WorkingHours {
 // ─── USERS ────────────────────────────────────────────────────────────────
 
 model TH_User {
-  id         String  @id @default(cuid())
-  entraId    String  @unique
-  email      String  @unique
-  name       String
-  role       String  @default("TECH")
-  hourlyRate Int?
-  isActive   Boolean @default(true)
+  id           String  @id @default(cuid())
+  entraId      String  @unique
+  email        String  @unique
+  name         String
+  role         String  @default("TECH")
+  hourlyRate   Int?
+  isActive     Boolean @default(true)
   /// True = appears as a column on the /schedule dispatch grid.
   /// Independent of role so office-only admins can be excluded.
   isOnsiteTech Boolean @default(false)
 
-  togglToken    String?
-  todoistToken  String?
-  pushoverToken String?
-  ntfyTopic     String?
+  togglToken       String?
+  todoistToken     String?
+  pushoverToken    String?
+  ntfyTopic        String?
   /// ON_CALL (all notifications), WORKING (assigned + SLA only, default),
   /// OFF_DUTY (critical only — Pushover)
-  notificationMode String @default("WORKING")
+  notificationMode String  @default("WORKING")
 
   /// Email addresses this tech owns — mail from any of these lands in
   /// the Inbox dashboard as a forwarder candidate (never auto-creates).
@@ -741,24 +752,28 @@ model TH_User {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  assignedTickets TH_Ticket[]        @relation("AssignedTickets")
-  createdTickets  TH_Ticket[]        @relation("CreatedTickets")
-  charges         TH_Charge[]
-  comments        TH_TicketComment[]
-  appointments        TH_Appointment[]   @relation("TechAppointments")
-  createdAppointments TH_Appointment[]   @relation("CreatedAppointments")
-  workingHours        TH_WorkingHours[]
-  fuelReceipts    TH_FuelReceipt[]
-  ticketEvents    TH_TicketEvent[]
-  parts           TH_TicketPart[]
-  forwardedInboundEmails TH_PendingInboundEmail[] @relation("ForwardedInboundEmails")
-  locationPings    TH_LocationPing[]   @relation("LocationPings")
-  stoppingPoints   TH_StoppingPoint[]  @relation("StoppingPoints")
-  remindersCreated TH_Reminder[]       @relation("ReminderCreator")
-  ticketViews      TH_TicketView[]     @relation("TicketViews")
-  viewPreference   TH_UserViewPreference? @relation("ViewPreference")
-  recurringTicketTemplates        TH_RecurringTicketTemplate[] @relation("RecurringTemplateCreator")
+  assignedTickets                  TH_Ticket[]                  @relation("AssignedTickets")
+  createdTickets                   TH_Ticket[]                  @relation("CreatedTickets")
+  charges                          TH_Charge[]
+  comments                         TH_TicketComment[]
+  appointments                     TH_Appointment[]             @relation("TechAppointments")
+  createdAppointments              TH_Appointment[]             @relation("CreatedAppointments")
+  workingHours                     TH_WorkingHours[]
+  fuelReceipts                     TH_FuelReceipt[]
+  ticketEvents                     TH_TicketEvent[]
+  parts                            TH_TicketPart[]
+  forwardedInboundEmails           TH_PendingInboundEmail[]     @relation("ForwardedInboundEmails")
+  locationPings                    TH_LocationPing[]            @relation("LocationPings")
+  stoppingPoints                   TH_StoppingPoint[]           @relation("StoppingPoints")
+  remindersCreated                 TH_Reminder[]                @relation("ReminderCreator")
+  ticketViews                      TH_TicketView[]              @relation("TicketViews")
+  viewPreference                   TH_UserViewPreference?       @relation("ViewPreference")
+  recurringTicketTemplates         TH_RecurringTicketTemplate[] @relation("RecurringTemplateCreator")
   recurringTicketTemplatesAssigned TH_RecurringTicketTemplate[] @relation("RecurringTemplateAssignee")
+  automationRulesCreated           TH_AutomationRule[]          @relation("AutomationRuleCreator")
+  automationRulesUpdated           TH_AutomationRule[]          @relation("AutomationRuleUpdater")
+  automationRulesApproved          TH_AutomationRule[]          @relation("AutomationRuleApprover")
+  automationRulesRejected          TH_AutomationRule[]          @relation("AutomationRuleRejecter")
 
   @@map("th_users")
   @@schema("tickethub")
@@ -778,31 +793,31 @@ enum TH_PendingInboundEmailStatus {
 /// or auto-created via a known contact. Shows up on /inbox for manual
 /// triage. Populated by the M365 Graph webhook.
 model TH_PendingInboundEmail {
-  id               String                       @id @default(cuid())
-  graphMessageId   String                       @unique
-  fromEmail        String
-  fromName         String?
-  subject          String
-  bodyText         String
-  bodyHtml         String?
-  snippet          String
-  receivedAt       DateTime
+  id                String                       @id @default(cuid())
+  graphMessageId    String                       @unique
+  fromEmail         String
+  fromName          String?
+  subject           String
+  bodyText          String
+  bodyHtml          String?
+  snippet           String
+  receivedAt        DateTime
   /// Which monitored mailbox received this email (e.g. accounting@pcc2k.com).
-  mailbox          String?
-  status           TH_PendingInboundEmailStatus @default(PENDING)
+  mailbox           String?
+  status            TH_PendingInboundEmailStatus @default(PENDING)
   /// If this email is a "forwarded by a tech" candidate, the user
   /// who forwarded it. The dashboard shows a badge and the
   /// create-ticket modal pre-fills assignee to this user.
   forwardedByUserId String?
-  forwardedBy      TH_User?                     @relation("ForwardedInboundEmails", fields: [forwardedByUserId], references: [id])
+  forwardedBy       TH_User?                     @relation("ForwardedInboundEmails", fields: [forwardedByUserId], references: [id])
   /// Rolling "plus N more" counter — additional emails from the same
   /// sender within the rate-limit window append into this row instead
   /// of creating new ones.
-  additionalCount  Int                          @default(0)
+  additionalCount   Int                          @default(0)
   /// After approval, the ticket that was created (audit trail).
-  matchedTicketId  String?
-  handledById      String?
-  handledAt        DateTime?
+  matchedTicketId   String?
+  handledById       String?
+  handledAt         DateTime?
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -819,30 +834,30 @@ model TH_PendingInboundEmail {
 ///   2. Rate limiting (skip if we just sent them one)
 ///   3. Loop prevention (see the ignoreUntil field)
 model TH_TicketEmailOutbound {
-  id             String   @id @default(cuid())
+  id           String    @id @default(cuid())
   /// Nullable so non-ticket messages (invoices, estimates, reminders
   /// that aren't tied to a single ticket) can share this log. Existing
   /// ticket-scoped senders keep populating it.
-  ticketId       String?
+  ticketId     String?
   /// Registry key from app/lib/messaging/templates.ts, e.g.
   /// NEW_TICKET, STAFF_REPLY, ONSITE_CONFIRMATION, REMINDER_NOTIFY,
   /// ESTIMATE_SENT, INVOICE_SENT.
-  mode           String
-  toEmail        String
+  mode         String
+  toEmail      String
   /// Buyer/contact display name when available.
-  toName         String?
-  subject        String
+  toName       String?
+  subject      String
   /// First ~2 KB of rendered body for log preview. Nullable — older
   /// rows predate this column and leave it empty.
-  bodyPreview    String?
-  status         String   @default("SENT")  // SENT | FAILED | QUEUED
-  errorMessage   String?
+  bodyPreview  String?
+  status       String    @default("SENT") // SENT | FAILED | QUEUED
+  errorMessage String?
   /// Arbitrary context (e.g. { estimateId, invoiceId, appointmentId }).
-  metadata       Json?
-  sentAt         DateTime @default(now())
+  metadata     Json?
+  sentAt       DateTime  @default(now())
   /// Drop inbound mail from toEmail for this long after an outbound —
   /// blocks vacation responder loops. Inbox pipeline checks this.
-  ignoreUntil    DateTime?
+  ignoreUntil  DateTime?
 
   @@index([ticketId, sentAt])
   @@index([toEmail, sentAt])
@@ -945,8 +960,8 @@ model TH_KBArticle {
 model TH_TaxRate {
   id        String   @id @default(cuid())
   state     String   @unique // ISO 3166-2 US state code (WV/MD/PA/…)
-  rateBps   Int      // basis points — 600 = 6.00%
-  label     String?  // optional display name ("West Virginia")
+  rateBps   Int // basis points — 600 = 6.00%
+  label     String? // optional display name ("West Virginia")
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
@@ -976,8 +991,8 @@ model TH_TicketTimer {
 model TH_SlaPolicy {
   id              String            @id @default(cuid())
   priority        TH_TicketPriority @unique
-  responseMinutes Int               // time-to-first-response target
-  resolveMinutes  Int               // total time-to-resolve target
+  responseMinutes Int // time-to-first-response target
+  resolveMinutes  Int // total time-to-resolve target
   createdAt       DateTime          @default(now())
   updatedAt       DateTime          @updatedAt
 
@@ -1019,21 +1034,21 @@ model TH_LocationPing {
 }
 
 model TH_StoppingPoint {
-  id             String    @id @default(cuid())
-  userId         String
-  user           TH_User   @relation("StoppingPoints", fields: [userId], references: [id])
-  latitude       Float
-  longitude      Float
-  arrivedAt      DateTime
-  departedAt     DateTime?
+  id              String    @id @default(cuid())
+  userId          String
+  user            TH_User   @relation("StoppingPoints", fields: [userId], references: [id])
+  latitude        Float
+  longitude       Float
+  arrivedAt       DateTime
+  departedAt      DateTime?
   durationMinutes Int?
   /// Nearest client site (if within radius)
-  nearestSiteId  String?
-  nearestSite    TH_Site?  @relation(fields: [nearestSiteId], references: [id])
-  distanceMeters Float?
+  nearestSiteId   String?
+  nearestSite     TH_Site?  @relation(fields: [nearestSiteId], references: [id])
+  distanceMeters  Float?
   /// Was a ticket created at this site during this stop?
-  ticketCreated  Boolean   @default(false)
-  ticketId       String?
+  ticketCreated   Boolean   @default(false)
+  ticketId        String?
 
   @@index([userId, arrivedAt])
   @@map("th_stopping_points")
@@ -1047,6 +1062,7 @@ enum TH_ReminderStatus {
   SNOOZED
   ACKNOWLEDGED
   CANCELLED
+
   @@schema("tickethub")
 }
 
@@ -1054,6 +1070,7 @@ enum TH_ReminderSource {
   MANUAL
   SYNCRO_ESTIMATE
   TICKETHUB_ESTIMATE
+
   @@schema("tickethub")
 }
 
@@ -1062,42 +1079,43 @@ enum TH_ReminderRecurrence {
   DAILY
   EVERY_3_DAYS
   WEEKLY
+
   @@schema("tickethub")
 }
 
 model TH_Reminder {
-  id            String                @id @default(cuid())
-  contactId     String
-  contact       TH_Contact            @relation(fields: [contactId], references: [id])
-  createdById   String?
-  createdBy     TH_User?              @relation("ReminderCreator", fields: [createdById], references: [id])
+  id          String     @id @default(cuid())
+  contactId   String
+  contact     TH_Contact @relation(fields: [contactId], references: [id])
+  createdById String?
+  createdBy   TH_User?   @relation("ReminderCreator", fields: [createdById], references: [id])
 
-  source        TH_ReminderSource
+  source      TH_ReminderSource
   /// External ID to deduplicate (e.g., Syncro estimate ID)
-  externalRef   String?
+  externalRef String?
 
-  title         String
-  body          String?
+  title     String
+  body      String?
   /// URL the contact can follow (e.g., Syncro estimate link)
-  actionUrl     String?
+  actionUrl String?
 
-  status        TH_ReminderStatus     @default(ACTIVE)
-  recurrence    TH_ReminderRecurrence @default(EVERY_3_DAYS)
-  dueDate       DateTime?
+  status     TH_ReminderStatus     @default(ACTIVE)
+  recurrence TH_ReminderRecurrence @default(EVERY_3_DAYS)
+  dueDate    DateTime?
 
   /// When the next notification should fire
-  nextNotifyAt  DateTime
+  nextNotifyAt   DateTime
   lastNotifiedAt DateTime?
-  notifyCount   Int                   @default(0)
+  notifyCount    Int       @default(0)
 
-  snoozedUntil  DateTime?
+  snoozedUntil   DateTime?
   acknowledgedAt DateTime?
   cancelledAt    DateTime?
 
-  createdAt     DateTime              @default(now())
-  updatedAt     DateTime              @updatedAt
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
-  deliveries    TH_ReminderDelivery[]
+  deliveries TH_ReminderDelivery[]
 
   @@unique([source, externalRef])
   @@index([status, nextNotifyAt])
@@ -1106,13 +1124,13 @@ model TH_Reminder {
 }
 
 model TH_ReminderDelivery {
-  id          String      @id @default(cuid())
-  reminderId  String
-  reminder    TH_Reminder @relation(fields: [reminderId], references: [id])
-  channel     String      // EMAIL | NTFY
-  toAddress   String
-  sentAt      DateTime    @default(now())
-  error       String?
+  id         String      @id @default(cuid())
+  reminderId String
+  reminder   TH_Reminder @relation(fields: [reminderId], references: [id])
+  channel    String // EMAIL | NTFY
+  toAddress  String
+  sentAt     DateTime    @default(now())
+  error      String?
 
   @@index([reminderId, sentAt])
   @@map("th_reminder_deliveries")
@@ -1120,13 +1138,13 @@ model TH_ReminderDelivery {
 }
 
 model TH_ContactPortalToken {
-  id          String    @id @default(cuid())
-  contactId   String
-  contact     TH_Contact @relation(fields: [contactId], references: [id])
-  token       String    @unique @default(cuid())
-  isActive    Boolean   @default(true)
-  expiresAt   DateTime?
-  createdAt   DateTime  @default(now())
+  id        String     @id @default(cuid())
+  contactId String
+  contact   TH_Contact @relation(fields: [contactId], references: [id])
+  token     String     @unique @default(cuid())
+  isActive  Boolean    @default(true)
+  expiresAt DateTime?
+  createdAt DateTime   @default(now())
 
   @@map("th_contact_portal_tokens")
   @@schema("tickethub")
@@ -1136,7 +1154,7 @@ model TH_ContactPortalToken {
 
 model TH_Setting {
   key       String   @id
-  value     String   // AES-256-GCM encrypted
+  value     String // AES-256-GCM encrypted
   updatedAt DateTime @updatedAt
 
   @@map("th_settings")
@@ -1146,13 +1164,13 @@ model TH_Setting {
 // ─── QBO INTEGRATION ─────────────────────────────────────────────────────
 
 model TH_QboToken {
-  id            String   @id @default("singleton")
-  realmId       String
-  accessToken   String
-  refreshToken  String
-  expiresAt     DateTime
-  createdAt     DateTime @default(now())
-  updatedAt     DateTime @updatedAt
+  id           String   @id @default("singleton")
+  realmId      String
+  accessToken  String
+  refreshToken String
+  expiresAt    DateTime
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
 
   @@map("th_qbo_tokens")
   @@schema("tickethub")
@@ -1161,12 +1179,12 @@ model TH_QboToken {
 // ─── AMAZON PRICE CACHE ──────────────────────────────────────────────────
 
 model TH_AmazonPriceCache {
-  asin        String   @id
-  title       String
-  price       Int      // cents
-  imageUrl    String?
-  productUrl  String
-  fetchedAt   DateTime @default(now())
+  asin       String   @id
+  title      String
+  price      Int // cents
+  imageUrl   String?
+  productUrl String
+  fetchedAt  DateTime @default(now())
 
   @@map("th_amazon_price_cache")
   @@schema("tickethub")
@@ -1178,20 +1196,21 @@ enum TH_ViewVisibility {
   PERSONAL
   SHARED
   SYSTEM
+
   @@schema("tickethub")
 }
 
 model TH_TicketView {
   id           String            @id @default(cuid())
   name         String
-  filters      Json              // { status[], priority[], assigneeId, clientId, type[], tag, q, slaAtRisk, dateField, dateFrom, dateTo }
-  sort         Json?             // { field, direction } — null = default sort
+  filters      Json // { status[], priority[], assigneeId, clientId, type[], tag, q, slaAtRisk, dateField, dateFrom, dateTo }
+  sort         Json? // { field, direction } — null = default sort
   visibility   TH_ViewVisibility @default(PERSONAL)
-  icon         String?           // optional emoji or icon name
+  icon         String? // optional emoji or icon name
   displayOrder Int               @default(0)
 
-  userId    String?
-  user      TH_User?  @relation("TicketViews", fields: [userId], references: [id])
+  userId String?
+  user   TH_User? @relation("TicketViews", fields: [userId], references: [id])
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -1202,9 +1221,9 @@ model TH_TicketView {
 
 /// Tracks which view each user last selected / set as default.
 model TH_UserViewPreference {
-  id            String @id @default(cuid())
-  userId        String @unique
-  user          TH_User @relation("ViewPreference", fields: [userId], references: [id])
+  id            String   @id @default(cuid())
+  userId        String   @unique
+  user          TH_User  @relation("ViewPreference", fields: [userId], references: [id])
   defaultViewId String
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
@@ -1219,7 +1238,7 @@ model TH_ChecklistTemplate {
   id          String   @id @default(cuid())
   name        String
   description String?
-  items       Json     // { id, text, estimatedMinutes, sortOrder }[]
+  items       Json // { id, text, estimatedMinutes, sortOrder }[]
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
@@ -1233,57 +1252,58 @@ enum TH_RecurringFrequency {
   DAILY
   WEEKLY
   MONTHLY
+
   @@schema("tickethub")
 }
 
 model TH_RecurringTicketTemplate {
-  id          String @id @default(cuid())
-  name        String
+  id   String @id @default(cuid())
+  name String
 
   // What ticket to create
-  clientId    String
-  client      TH_Client     @relation(fields: [clientId], references: [id])
-  siteId      String?
-  site        TH_Site?      @relation(fields: [siteId], references: [id])
-  contactId   String?
-  contact     TH_Contact?   @relation(fields: [contactId], references: [id])
-  contractId  String?
-  contract    TH_Contract?  @relation(fields: [contractId], references: [id])
+  clientId     String
+  client       TH_Client    @relation(fields: [clientId], references: [id])
+  siteId       String?
+  site         TH_Site?     @relation(fields: [siteId], references: [id])
+  contactId    String?
+  contact      TH_Contact?  @relation(fields: [contactId], references: [id])
+  contractId   String?
+  contract     TH_Contract? @relation(fields: [contractId], references: [id])
   assignedToId String?
   assignedTo   TH_User?     @relation("RecurringTemplateAssignee", fields: [assignedToId], references: [id])
 
-  title        String
-  description  String?
-  priority     TH_TicketPriority @default(MEDIUM)
-  type         TH_TicketType     @default(SERVICE_REQUEST)
+  title       String
+  description String?
+  priority    TH_TicketPriority @default(MEDIUM)
+  type        TH_TicketType     @default(SERVICE_REQUEST)
 
   // Schedule
   frequency    TH_RecurringFrequency
   /// Every N units (days/weeks/months). 1 = every period.
-  interval     Int @default(1)
+  interval     Int                   @default(1)
   /// 0=Sunday..6=Saturday (WEEKLY only).
   dayOfWeek    Int?
   /// 1..31 (MONTHLY only). If > days in month, clamped to last day.
   dayOfMonth   Int?
   /// 0..23 — fire hour in template timezone.
-  hourOfDay    Int @default(8)
+  hourOfDay    Int                   @default(8)
   /// 0..59 — fire minute in template timezone.
-  minuteOfHour Int @default(0)
+  minuteOfHour Int                   @default(0)
   /// IANA timezone the schedule is interpreted in.
-  timezone     String @default("America/New_York")
+  timezone     String                @default("America/New_York")
 
-  active       Boolean @default(true)
-  nextRunAt    DateTime
-  lastRunAt    DateTime?
-  runCount     Int @default(0)
+  active    Boolean   @default(true)
+  nextRunAt DateTime
+  lastRunAt DateTime?
+  runCount  Int       @default(0)
 
-  createdById  String
-  createdBy    TH_User @relation("RecurringTemplateCreator", fields: [createdById], references: [id])
+  createdById String
+  createdBy   TH_User @relation("RecurringTemplateCreator", fields: [createdById], references: [id])
 
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
-  tickets      TH_Ticket[]
+  tickets TH_Ticket[]
 
   @@index([active, nextRunAt])
   @@map("th_recurring_ticket_templates")
@@ -1295,7 +1315,7 @@ model TH_RecurringTicketTemplate {
 model TH_InvoiceTemplate {
   id        String   @id @default(cuid())
   name      String   @default("Default")
-  config    Json     // InvoiceTemplateConfig — sections, field visibility, colors, fonts
+  config    Json // InvoiceTemplateConfig — sections, field visibility, colors, fonts
   logoUrl   String?
   isActive  Boolean  @default(true)
   createdAt DateTime @default(now())
@@ -1311,12 +1331,12 @@ model TH_InvoiceTemplate {
 // client-side and returns a PaymentMethod ID we attach to the Customer.
 
 model TH_SavedPaymentMethod {
-  id                    String   @id @default(cuid())
+  id                    String    @id @default(cuid())
   clientId              String
   client                TH_Client @relation(fields: [clientId], references: [id], onDelete: Cascade)
   /// Stripe PaymentMethod ID (`pm_…`). Source of truth lives on Stripe;
   /// our row is a cache for list rendering + charge dispatch.
-  stripePaymentMethodId String   @unique
+  stripePaymentMethodId String    @unique
   /// Card brand — visa, mastercard, amex, discover, etc.
   brand                 String
   last4                 String
@@ -1324,11 +1344,11 @@ model TH_SavedPaymentMethod {
   expYear               Int
   /// Cardholder name as provided during the SetupIntent, if any.
   cardholderName        String?
-  isDefault             Boolean  @default(false)
+  isDefault             Boolean   @default(false)
   /// Last time this card was used to successfully charge an invoice.
   lastUsedAt            DateTime?
-  createdAt             DateTime @default(now())
-  updatedAt             DateTime @updatedAt
+  createdAt             DateTime  @default(now())
+  updatedAt             DateTime  @updatedAt
 
   @@index([clientId])
   @@map("th_saved_payment_methods")
@@ -1342,11 +1362,138 @@ model TH_SavedPaymentMethod {
 model TH_EstimateTemplate {
   id        String   @id @default(cuid())
   name      String   @default("Default")
-  config    Json     // EstimateTemplateConfig — sections, field visibility, colors, fonts
+  config    Json // EstimateTemplateConfig — sections, field visibility, colors, fonts
   isActive  Boolean  @default(true)
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
   @@map("th_estimate_templates")
+  @@schema("tickethub")
+}
+
+// ─── AUTOMATION ENGINE ───────────────────────────────────────────────────
+// Phase 0: event plumbing. Rules/runs/deferred tables exist; only a
+// synthetic catch-all rule logs every emitted event for verification.
+// Full rule evaluator ships in Phase 1 — see AUTOMATION plan doc.
+
+/// User-defined "IF <event> THEN <actions>" rule. EVENT / SCHEDULED /
+/// TIME_IN_STATE triggers; JSON condition tree; ordered action list.
+model TH_AutomationRule {
+  id            String   @id @default(cuid())
+  name          String
+  description   String?
+  enabled       Boolean  @default(true)
+  /// When true, conditions evaluate and matches log to TH_AutomationRun,
+  /// but actions do NOT execute. Recovery lever for risky rules.
+  dryRun        Boolean  @default(false)
+  /// Lower number runs first within the same trigger. Defaults to 100.
+  priority      Int      @default(100)
+  /// "EVENT" | "SCHEDULED" | "TIME_IN_STATE"
+  triggerType   String
+  /// Trigger-specific config. See plan doc for shape per triggerType.
+  triggerConfig Json
+  /// Boolean tree of { field, op, value } leaves with all/any/not combinators.
+  /// Empty object {} means always-true.
+  conditions    Json
+  /// Ordered array of action objects: [{ type, params, stopChainOnFailure? }, ...]
+  actions       Json
+  /// Free-text labels for UI grouping.
+  tags          String[] @default([])
+
+  /// "DRAFT" | "PENDING_APPROVAL" | "APPROVED" | "REJECTED"
+  /// Non-admins can create rules but they require admin approval before
+  /// firing. Seeded system rules default to APPROVED. Edits to an
+  /// APPROVED rule by a non-admin flip it back to PENDING_APPROVAL.
+  approvalStatus String    @default("APPROVED")
+  submittedAt    DateTime?
+  approvedAt     DateTime?
+  approvedById   String?
+  rejectedAt     DateTime?
+  rejectedById   String?
+  rejectionNote  String?
+
+  createdById String
+  createdBy   TH_User  @relation("AutomationRuleCreator", fields: [createdById], references: [id])
+  updatedById String?
+  updatedBy   TH_User? @relation("AutomationRuleUpdater", fields: [updatedById], references: [id])
+  approvedBy  TH_User? @relation("AutomationRuleApprover", fields: [approvedById], references: [id])
+  rejectedBy  TH_User? @relation("AutomationRuleRejecter", fields: [rejectedById], references: [id])
+
+  lastFiredAt  DateTime?
+  fireCount    Int       @default(0)
+  failureCount Int       @default(0)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  runs            TH_AutomationRun[]
+  deferredActions TH_AutomationDeferredAction[]
+
+  @@index([enabled, triggerType])
+  @@index([approvalStatus])
+  @@map("th_automation_rules")
+  @@schema("tickethub")
+}
+
+/// Audit row for every rule evaluation — matched OR skipped OR errored.
+/// Entity is referenced by (entityType, entityId) string pair; no FK so
+/// deleting entities doesn't cascade-corrupt audit history.
+model TH_AutomationRun {
+  id     String            @id @default(cuid())
+  ruleId String
+  rule   TH_AutomationRule @relation(fields: [ruleId], references: [id], onDelete: Cascade)
+
+  entityType   String
+  entityId     String
+  eventType    String
+  eventPayload Json
+  eventAt      DateTime
+
+  /// "MATCHED" | "SKIPPED_CONDITIONS" | "SKIPPED_DISABLED" | "SKIPPED_DRYRUN" | "ERROR"
+  result          String
+  /// Per-condition pass/fail trace; null until Phase 1 evaluator ships.
+  conditionsTrace Json?
+  /// [{ type, params, result: "OK"|"FAIL", error? }]
+  actionsRun      Json?
+  errorMessage    String?
+
+  /// Groups runs triggered by the same root event across a chain of actions.
+  chainId     String
+  chainDepth  Int     @default(0)
+  parentRunId String?
+
+  createdAt DateTime @default(now())
+
+  @@index([ruleId, createdAt])
+  @@index([entityType, entityId, createdAt])
+  @@index([chainId])
+  @@map("th_automation_runs")
+  @@schema("tickethub")
+}
+
+/// Action scheduled by `chain.defer` for execution at `fireAt`. Drained
+/// every minute by api/cron/automation-deferred. `recheckConditions`
+/// re-verifies the rule's conditions against current state at fire time.
+model TH_AutomationDeferredAction {
+  id                String            @id @default(cuid())
+  ruleId            String
+  rule              TH_AutomationRule @relation(fields: [ruleId], references: [id], onDelete: Cascade)
+  parentRunId       String
+  entityType        String
+  entityId          String
+  action            Json
+  recheckConditions Boolean           @default(true)
+  fireAt            DateTime
+  /// "PENDING" | "FIRED" | "SKIPPED" | "FAILED" | "CANCELLED"
+  status            String            @default("PENDING")
+  firedAt           DateTime?
+  errorMessage      String?
+  chainId           String
+  chainDepth        Int
+
+  createdAt DateTime @default(now())
+
+  @@index([status, fireAt])
+  @@map("th_automation_deferred")
   @@schema("tickethub")
 }
