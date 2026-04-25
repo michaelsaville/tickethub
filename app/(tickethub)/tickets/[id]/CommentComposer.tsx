@@ -10,21 +10,36 @@ import {
   incrementCannedReplyUse,
   type CannedReplyDTO,
 } from '@/app/lib/actions/canned-replies'
+import {
+  listMentionableUsers,
+  type MentionUserDTO,
+} from '@/app/lib/actions/mentions'
 import { CannedReplyPicker } from './CannedReplyPicker'
+import { MentionPicker } from './MentionPicker'
 
 type TriggerInfo = { query: string; start: number; end: number }
 
-function detectTrigger(text: string, caret: number): TriggerInfo | null {
+function detectCannedTrigger(text: string, caret: number): TriggerInfo | null {
   const before = text.slice(0, caret)
   const lineStart = before.lastIndexOf('\n') + 1
   const lineBefore = text.slice(lineStart, caret)
   if (!lineBefore.startsWith('/')) return null
   if (/\s/.test(lineBefore.slice(1))) return null
-  return {
-    query: lineBefore.slice(1),
-    start: lineStart,
-    end: caret,
+  return { query: lineBefore.slice(1), start: lineStart, end: caret }
+}
+
+function detectMentionTrigger(text: string, caret: number): TriggerInfo | null {
+  const before = text.slice(0, caret)
+  const atIdx = before.lastIndexOf('@')
+  if (atIdx === -1) return null
+  if (atIdx > 0) {
+    const prev = before[atIdx - 1]
+    if (!/[\s([{,]/.test(prev)) return null
   }
+  const q = before.slice(atIdx + 1)
+  if (/\s/.test(q)) return null
+  if (q.length > 50) return null
+  return { query: q, start: atIdx, end: caret }
 }
 
 export function CommentComposer({ ticketId }: { ticketId: string }) {
@@ -39,12 +54,18 @@ export function CommentComposer({ ticketId }: { ticketId: string }) {
   const [replies, setReplies] = useState<CannedReplyDTO[]>([])
   const [repliesLoaded, setRepliesLoaded] = useState(false)
   const [repliesLoading, setRepliesLoading] = useState(false)
-  const [trigger, setTrigger] = useState<TriggerInfo | null>(null)
+
+  const [users, setUsers] = useState<MentionUserDTO[]>([])
+  const [usersLoaded, setUsersLoaded] = useState(false)
+  const [usersLoading, setUsersLoading] = useState(false)
+
+  const [cannedTrigger, setCannedTrigger] = useState<TriggerInfo | null>(null)
+  const [mentionTrigger, setMentionTrigger] = useState<TriggerInfo | null>(null)
   const [highlightIndex, setHighlightIndex] = useState(0)
 
-  const filtered = useMemo(() => {
-    if (!trigger) return []
-    const q = trigger.query.toLowerCase()
+  const filteredReplies = useMemo(() => {
+    if (!cannedTrigger) return []
+    const q = cannedTrigger.query.toLowerCase()
     if (!q) return replies.slice(0, 6)
     return replies
       .filter(
@@ -53,11 +74,24 @@ export function CommentComposer({ ticketId }: { ticketId: string }) {
           r.title.toLowerCase().includes(q),
       )
       .slice(0, 6)
-  }, [trigger, replies])
+  }, [cannedTrigger, replies])
+
+  const filteredUsers = useMemo(() => {
+    if (!mentionTrigger) return []
+    const q = mentionTrigger.query.toLowerCase()
+    if (!q) return users.slice(0, 6)
+    return users
+      .filter(
+        (u) =>
+          u.name.toLowerCase().includes(q) ||
+          u.email.toLowerCase().includes(q),
+      )
+      .slice(0, 6)
+  }, [mentionTrigger, users])
 
   useEffect(() => {
     setHighlightIndex(0)
-  }, [trigger?.query])
+  }, [cannedTrigger?.query, mentionTrigger?.query])
 
   const voice = useVoiceInput((chunk) => {
     setBody((prev) => (prev ? `${prev} ${chunk}` : chunk))
@@ -77,32 +111,59 @@ export function CommentComposer({ ticketId }: { ticketId: string }) {
     }
   }
 
-  function refreshTrigger(text: string, caret: number) {
-    const t = detectTrigger(text, caret)
-    setTrigger(t)
-    if (t) ensureRepliesLoaded()
+  async function ensureUsersLoaded() {
+    if (usersLoaded || usersLoading) return
+    setUsersLoading(true)
+    try {
+      const list = await listMentionableUsers()
+      setUsers(list)
+    } catch {
+      // Silent — picker just shows empty if list never loads.
+    } finally {
+      setUsersLoaded(true)
+      setUsersLoading(false)
+    }
+  }
+
+  function refreshTriggers(text: string, caret: number) {
+    const ct = detectCannedTrigger(text, caret)
+    if (ct) {
+      setCannedTrigger(ct)
+      setMentionTrigger(null)
+      ensureRepliesLoaded()
+      return
+    }
+    const mt = detectMentionTrigger(text, caret)
+    if (mt) {
+      setMentionTrigger(mt)
+      setCannedTrigger(null)
+      ensureUsersLoaded()
+      return
+    }
+    setCannedTrigger(null)
+    setMentionTrigger(null)
   }
 
   function handleChange(e: React.ChangeEvent<HTMLTextAreaElement>) {
     const v = e.target.value
     setBody(v)
     const caret = e.target.selectionStart ?? v.length
-    refreshTrigger(v, caret)
+    refreshTriggers(v, caret)
   }
 
   function handleSelect(e: React.SyntheticEvent<HTMLTextAreaElement>) {
     const ta = e.currentTarget
     const caret = ta.selectionStart ?? ta.value.length
-    refreshTrigger(ta.value, caret)
+    refreshTriggers(ta.value, caret)
   }
 
-  function insertReply(reply: CannedReplyDTO) {
-    if (!trigger) return
-    const before = body.slice(0, trigger.start)
-    const after = body.slice(trigger.end)
+  function insertCannedReply(reply: CannedReplyDTO) {
+    if (!cannedTrigger) return
+    const before = body.slice(0, cannedTrigger.start)
+    const after = body.slice(cannedTrigger.end)
     const next = before + reply.body + after
     setBody(next)
-    setTrigger(null)
+    setCannedTrigger(null)
     incrementCannedReplyUse(reply.id).catch(() => {})
     const caretPos = before.length + reply.body.length
     requestAnimationFrame(() => {
@@ -114,22 +175,65 @@ export function CommentComposer({ ticketId }: { ticketId: string }) {
     })
   }
 
-  function handleKeyDown(e: React.KeyboardEvent<HTMLTextAreaElement>) {
-    if (!trigger) {
-      if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') {
-        e.preventDefault()
-        submit()
+  function insertMention(user: MentionUserDTO) {
+    if (!mentionTrigger) return
+    const before = body.slice(0, mentionTrigger.start)
+    const after = body.slice(mentionTrigger.end)
+    const insertion = `@${user.name} `
+    const next = before + insertion + after
+    setBody(next)
+    setMentionTrigger(null)
+    const caretPos = before.length + insertion.length
+    requestAnimationFrame(() => {
+      const ta = textareaRef.current
+      if (ta) {
+        ta.focus()
+        ta.setSelectionRange(caretPos, caretPos)
       }
+    })
+  }
+
+  function handleKeyDown(e: React.KeyboardEvent<HTMLTextAreaElement>) {
+    if (cannedTrigger) {
+      handlePickerKey(
+        e,
+        filteredReplies,
+        (r) => insertCannedReply(r),
+        () => setCannedTrigger(null),
+      )
       return
     }
+    if (mentionTrigger) {
+      handlePickerKey(
+        e,
+        filteredUsers,
+        (u) => insertMention(u),
+        () => setMentionTrigger(null),
+      )
+      return
+    }
+    if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') {
+      e.preventDefault()
+      submit()
+    }
+  }
+
+  function handlePickerKey<T>(
+    e: React.KeyboardEvent<HTMLTextAreaElement>,
+    items: T[],
+    onSelect: (item: T) => void,
+    onClose: () => void,
+  ) {
     if (e.key === 'Escape') {
       e.preventDefault()
-      setTrigger(null)
+      onClose()
       return
     }
     if (e.key === 'ArrowDown') {
       e.preventDefault()
-      setHighlightIndex((i) => (filtered.length === 0 ? 0 : Math.min(filtered.length - 1, i + 1)))
+      setHighlightIndex((i) =>
+        items.length === 0 ? 0 : Math.min(items.length - 1, i + 1),
+      )
       return
     }
     if (e.key === 'ArrowUp') {
@@ -138,11 +242,11 @@ export function CommentComposer({ ticketId }: { ticketId: string }) {
       return
     }
     if (e.key === 'Enter' || e.key === 'Tab') {
-      if (filtered.length > 0) {
+      if (items.length > 0) {
         e.preventDefault()
-        insertReply(filtered[highlightIndex])
+        onSelect(items[highlightIndex])
       } else {
-        setTrigger(null)
+        onClose()
       }
     }
   }
@@ -163,7 +267,8 @@ export function CommentComposer({ ticketId }: { ticketId: string }) {
           body: { body: pending, isInternal: pendingInternal },
         })
         setBody('')
-        setTrigger(null)
+        setCannedTrigger(null)
+        setMentionTrigger(null)
         if (res.synced) {
           router.refresh()
         } else {
@@ -209,9 +314,9 @@ export function CommentComposer({ ticketId }: { ticketId: string }) {
         </button>
         <span
           className="hidden font-mono text-[10px] uppercase tracking-wider text-th-text-muted md:inline"
-          title="Type / at the start of a line to insert a saved reply"
+          title="Type / for saved replies, @ to mention a teammate"
         >
-          / for saved
+          / saved · @ mention
         </span>
         <div className="ml-auto">
           {voice.supported && (
@@ -237,7 +342,10 @@ export function CommentComposer({ ticketId }: { ticketId: string }) {
         onKeyDown={handleKeyDown}
         onKeyUp={handleSelect}
         onClick={handleSelect}
-        onFocus={() => ensureRepliesLoaded()}
+        onFocus={() => {
+          ensureRepliesLoaded()
+          ensureUsersLoaded()
+        }}
         rows={4}
         className={
           isInternal
@@ -250,13 +358,22 @@ export function CommentComposer({ ticketId }: { ticketId: string }) {
             : 'Reply — visible to the client…'
         }
       />
-      {trigger && (
+      {cannedTrigger && (
         <CannedReplyPicker
-          replies={filtered}
+          replies={filteredReplies}
           highlightIndex={highlightIndex}
-          onSelect={insertReply}
+          onSelect={insertCannedReply}
           onHover={setHighlightIndex}
-          loading={repliesLoading && filtered.length === 0}
+          loading={repliesLoading && filteredReplies.length === 0}
+        />
+      )}
+      {mentionTrigger && (
+        <MentionPicker
+          users={filteredUsers}
+          highlightIndex={highlightIndex}
+          onSelect={insertMention}
+          onHover={setHighlightIndex}
+          loading={usersLoading && filteredUsers.length === 0}
         />
       )}
       {err && (

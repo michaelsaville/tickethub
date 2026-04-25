@@ -514,6 +514,8 @@ function EventRow({
     label = 'Ticket created'
   } else if (event.type === 'TITLE_CHANGE') {
     label = `Title changed`
+  } else if (event.type === 'MENTION') {
+    label = `Mentioned a teammate`
   }
   return (
     <div className="text-xs text-th-text-secondary">

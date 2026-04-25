@@ -4,6 +4,8 @@ import { requireAuth } from '@/app/lib/api-auth'
 import { createComment } from '@/app/lib/comments-core'
 import { prisma } from '@/app/lib/prisma'
 import { sendTicketClientEmail } from '@/app/lib/ticket-email'
+import { findMentionedUserIds } from '@/app/lib/mentions'
+import { notifyUser, ticketUrl } from '@/app/lib/notify-server'
 
 /**
  * REST endpoint for creating a ticket comment. Mirrors the `addComment`
@@ -85,5 +87,70 @@ export async function POST(
       messageText: body,
     })
   }
+
+  // Fire-and-forget @mention dispatch — never blocks the response.
+  void dispatchMentions(ticketId, body, session!.user.id)
+
   return NextResponse.json({ data: { ok: true }, error: null }, { status: 201 })
+}
+
+/**
+ * Resolve @mentions in the comment body to active TH_Users, log a MENTION
+ * event per mentioned user, and dispatch ntfy/Pushover notifications.
+ * Excludes the author so people don't get pinged for self-mentions.
+ */
+async function dispatchMentions(
+  ticketId: string,
+  body: string,
+  authorId: string,
+): Promise<void> {
+  try {
+    const users = await prisma.tH_User.findMany({
+      where: { isActive: true },
+      select: { id: true, name: true },
+    })
+    const mentionedIds = findMentionedUserIds(body, users).filter(
+      (id) => id !== authorId,
+    )
+    if (mentionedIds.length === 0) return
+
+    const [author, ticket] = await Promise.all([
+      prisma.tH_User.findUnique({
+        where: { id: authorId },
+        select: { name: true },
+      }),
+      prisma.tH_Ticket.findUnique({
+        where: { id: ticketId },
+        select: { ticketNumber: true, title: true },
+      }),
+    ])
+    if (!ticket) return
+
+    const authorName = author?.name ?? 'A teammate'
+    const url = ticketUrl(ticketId)
+    const preview = body.length > 200 ? `${body.slice(0, 200)}…` : body
+
+    await Promise.all([
+      // Log MENTION event per user (timeline visibility)
+      prisma.tH_TicketEvent.createMany({
+        data: mentionedIds.map((mentionedUserId) => ({
+          ticketId,
+          userId: authorId,
+          type: 'MENTION',
+          data: { mentionedUserId },
+        })),
+      }),
+      // Dispatch notifications in parallel
+      ...mentionedIds.map((userId) =>
+        notifyUser(userId, {
+          title: `@${authorName} mentioned you · #${ticket.ticketNumber}`,
+          body: preview,
+          url,
+          category: 'COMMENT',
+        }),
+      ),
+    ])
+  } catch (e) {
+    console.error('[comments] dispatchMentions failed', e)
+  }
 }
