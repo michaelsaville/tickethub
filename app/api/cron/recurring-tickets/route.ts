@@ -46,7 +46,11 @@ export async function GET(req: NextRequest) {
 
   for (const t of due) {
     try {
-      const result = await spawnFromTemplate(t.id, t.createdById)
+      // Pass the template's scheduled time (nextRunAt) as the appointment
+      // anchor — that's what the user picked, not the cron firing time.
+      const result = await spawnFromTemplate(t.id, t.createdById, {
+        appointmentStart: t.nextRunAt,
+      })
       if (!result.ok) {
         errors.push({ templateId: t.id, name: t.name, error: result.error })
         continue

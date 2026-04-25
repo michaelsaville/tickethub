@@ -60,6 +60,8 @@ interface TemplateInput {
   minuteOfHour: number
   timezone: string
   active: boolean
+  createAppointment: boolean
+  appointmentDurationMinutes: number | null
 }
 
 function parseFormData(fd: FormData): TemplateInput | { error: string } {
@@ -110,6 +112,20 @@ function parseFormData(fd: FormData): TemplateInput | { error: string } {
     return { error: 'Monthly schedule requires a day of month (1–31)' }
   }
 
+  const createAppointment =
+    fd.get('createAppointment') === 'on' || fd.get('createAppointment') === 'true'
+  let appointmentDurationMinutes: number | null = null
+  if (createAppointment) {
+    const v = intOrNull('appointmentDurationMinutes')
+    if (v == null || v < 5 || v > 600) {
+      return {
+        error:
+          'Appointment duration is required (5–600 minutes) when auto-create is on',
+      }
+    }
+    appointmentDurationMinutes = v
+  }
+
   return {
     name,
     clientId,
@@ -129,6 +145,8 @@ function parseFormData(fd: FormData): TemplateInput | { error: string } {
     minuteOfHour,
     timezone,
     active: fd.get('active') === 'on' || fd.get('active') === 'true',
+    createAppointment,
+    appointmentDurationMinutes,
   }
 }
 
@@ -280,10 +298,17 @@ export async function runRecurringTemplateNow(
  * Spawn exactly one ticket from a template. Does NOT advance the schedule —
  * the caller updates lastRunAt/runCount/nextRunAt. Keeps the cron loop and
  * the manual "Run now" button on a shared code path.
+ *
+ * When `options.appointmentStart` is given AND the template has
+ * createAppointment + assignedToId + appointmentDurationMinutes, also
+ * creates a TH_Appointment for the spawned ticket. The cron passes
+ * `t.nextRunAt`; manual "Run now" omits it on purpose because spawning
+ * an appointment for "right now, somewhere unspecified" is rarely useful.
  */
 export async function spawnFromTemplate(
   templateId: string,
   actorUserId: string,
+  options?: { appointmentStart?: Date },
 ): Promise<
   | { ok: true; ticketId: string; ticketNumber: number }
   | { ok: false; error: string }
@@ -317,5 +342,37 @@ export async function spawnFromTemplate(
       },
     })
   }
+
+  // Auto-create the matching appointment when the template asks for it.
+  if (
+    t.createAppointment &&
+    t.assignedToId &&
+    t.appointmentDurationMinutes &&
+    options?.appointmentStart
+  ) {
+    const start = options.appointmentStart
+    const end = new Date(
+      start.getTime() + t.appointmentDurationMinutes * 60_000,
+    )
+    try {
+      await prisma.tH_Appointment.create({
+        data: {
+          ticketId: result.ticketId,
+          technicianId: t.assignedToId,
+          createdById: actorUserId,
+          scheduledStart: start,
+          scheduledEnd: end,
+        },
+      })
+    } catch (e) {
+      // Don't fail the spawn over an appointment-write hiccup; ticket
+      // creation succeeded and a tech can schedule manually if needed.
+      console.error(
+        `[recurring-tickets] auto-appointment for template ${t.id} failed`,
+        e,
+      )
+    }
+  }
+
   return result
 }

@@ -1339,6 +1339,14 @@ model TH_RecurringTicketTemplate {
   lastRunAt DateTime?
   runCount  Int       @default(0)
 
+  /// When true, each cron spawn ALSO creates a TH_Appointment on the
+  /// fresh ticket — technician = assignedToId, scheduledStart =
+  /// nextRunAt, duration = appointmentDurationMinutes. No-op when
+  /// assignedToId is null. Manual "Run now" deliberately skips the
+  /// appointment since the spawn time is undefined.
+  createAppointment          Boolean @default(false)
+  appointmentDurationMinutes Int?
+
   createdById String
   createdBy   TH_User @relation("RecurringTemplateCreator", fields: [createdById], references: [id])
 

@@ -50,6 +50,8 @@ export interface TemplateFormInitial {
   minuteOfHour: number
   timezone: string
   active: boolean
+  createAppointment: boolean
+  appointmentDurationMinutes: number | null
 }
 
 const DEFAULT_INITIAL: TemplateFormInitial = {
@@ -71,6 +73,8 @@ const DEFAULT_INITIAL: TemplateFormInitial = {
   minuteOfHour: 0,
   timezone: 'America/New_York',
   active: true,
+  createAppointment: false,
+  appointmentDurationMinutes: 60,
 }
 
 const DAY_NAMES = [
@@ -115,6 +119,12 @@ export function TemplateForm({
   const [hourOfDay, setHourOfDay] = useState(initial.hourOfDay)
   const [minuteOfHour, setMinuteOfHour] = useState(initial.minuteOfHour)
   const [timezone, setTimezone] = useState(initial.timezone)
+  const [createAppointment, setCreateAppointment] = useState(
+    initial.createAppointment,
+  )
+  const [appointmentDurationMinutes, setAppointmentDurationMinutes] = useState(
+    initial.appointmentDurationMinutes ?? 60,
+  )
 
   const navigated = useRef(false)
   useEffect(() => {
@@ -413,6 +423,52 @@ export function TemplateForm({
                 </li>
               ))}
             </ul>
+          </div>
+        )}
+      </Section>
+
+      <Section title="Appointment (optional)">
+        <p className="text-xs text-th-text-secondary">
+          Auto-create a TH_Appointment for the assigned tech each time
+          this template spawns a ticket. The appointment starts at the
+          scheduled time above and runs for the duration you set.
+          Requires an Assignee — if none is set, the appointment is
+          silently skipped on each spawn.
+        </p>
+        <label className="flex items-center gap-2 text-sm text-slate-200">
+          <input
+            type="checkbox"
+            name="createAppointment"
+            checked={createAppointment}
+            onChange={(e) => setCreateAppointment(e.target.checked)}
+            className="h-4 w-4 rounded border-th-border bg-th-base text-accent focus:ring-accent"
+          />
+          Auto-create appointment for the assigned tech on every spawn
+        </label>
+        {createAppointment && (
+          <div className="grid gap-3 md:grid-cols-2">
+            <Field label="Duration (minutes)">
+              <input
+                type="number"
+                name="appointmentDurationMinutes"
+                value={appointmentDurationMinutes}
+                min={5}
+                max={600}
+                step={5}
+                onChange={(e) =>
+                  setAppointmentDurationMinutes(
+                    Math.max(
+                      5,
+                      Math.min(
+                        600,
+                        parseInt(e.target.value || '60', 10),
+                      ),
+                    ),
+                  )
+                }
+                className={inputCls}
+              />
+            </Field>
           </div>
         )}
       </Section>

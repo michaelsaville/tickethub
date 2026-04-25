@@ -85,6 +85,8 @@ export default async function EditRecurringTemplatePage({
     minuteOfHour: template.minuteOfHour,
     timezone: template.timezone,
     active: template.active,
+    createAppointment: template.createAppointment,
+    appointmentDurationMinutes: template.appointmentDurationMinutes,
   }
 
   const action = updateRecurringTemplate.bind(null, id)
