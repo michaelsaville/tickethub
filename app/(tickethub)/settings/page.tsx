@@ -79,6 +79,11 @@ const GROUPS = [
         description: 'Per-tech schedules for the dispatch board',
       },
       {
+        href: '/settings/on-call',
+        title: 'On-Call Rotation',
+        description: 'Who gets paged after hours; generate weekly rotations + manual swaps',
+      },
+      {
         href: '/settings/calendar-feed',
         title: 'Calendar Feed (ICS)',
         description: 'Subscribe to your appointments from Outlook / Google / Apple',

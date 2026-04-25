@@ -130,6 +130,43 @@ export async function notifyTeam(opts: {
 /** Back-compat alias — admin fan-out now goes to the shared topic. */
 export const notifyAdmins = notifyTeam
 
+/**
+ * Page whoever is currently on the on-call rotation. Falls back to the
+ * shared team topic when nobody is on the schedule so urgent signal is
+ * never lost. Always categorized as 'NEW_HIGH' so it pierces WORKING
+ * mode but is still suppressed in OFF_DUTY unless explicitly critical.
+ */
+export async function notifyOnCall(opts: {
+  title: string
+  body: string
+  url?: string
+  priority?: NotificationPriority
+}): Promise<{ deliveredTo: 'on_call' | 'team'; userId?: string }> {
+  try {
+    const { getCurrentOnCall } = await import('@/app/lib/on-call')
+    const entry = await getCurrentOnCall()
+    if (entry) {
+      await notifyUser(entry.userId, {
+        title: `[on-call] ${opts.title}`,
+        body: opts.body,
+        url: opts.url,
+        priority: opts.priority ?? 'high',
+        category: 'NEW_HIGH',
+      })
+      return { deliveredTo: 'on_call', userId: entry.userId }
+    }
+  } catch (e) {
+    console.error('[notify-server] notifyOnCall lookup failed', e)
+  }
+  await notifyTeam({
+    title: `[no-on-call] ${opts.title}`,
+    body: opts.body,
+    url: opts.url,
+    priority: opts.priority ?? 'high',
+  })
+  return { deliveredTo: 'team' }
+}
+
 export function ticketUrl(ticketId: string): string {
   const base = process.env.NEXTAUTH_URL ?? 'https://tickethub.pcc2k.com'
   return `${base.replace(/\/$/, '')}/tickets/${ticketId}`

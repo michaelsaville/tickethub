@@ -7,6 +7,7 @@ import { TicketProperties } from './TicketProperties'
 import { EditableTitle } from './EditableTitle'
 import { CommentComposer } from './CommentComposer'
 import { MergeTicketButton } from './MergeTicketButton'
+import { PageOnCallButton } from './PageOnCallButton'
 import { Attachments } from './Attachments'
 import { QuickCharge } from './QuickCharge'
 import { ReceiptScanner } from './ReceiptScanner'
@@ -250,6 +251,13 @@ export default async function TicketDetailPage({
               ticketTitle={ticket.title}
               clientId={ticket.client.id}
               clientName={ticket.client.name}
+            />
+          </div>
+          <div className="mt-2">
+            <PageOnCallButton
+              ticketId={ticket.id}
+              ticketNumber={ticket.ticketNumber}
+              ticketTitle={ticket.title}
             />
           </div>
           <dl className="th-card mt-4 space-y-3 text-xs">

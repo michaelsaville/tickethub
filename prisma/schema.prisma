@@ -785,6 +785,7 @@ model TH_User {
   automationRulesApproved          TH_AutomationRule[]          @relation("AutomationRuleApprover")
   automationRulesRejected          TH_AutomationRule[]          @relation("AutomationRuleRejecter")
   cannedReplies                    TH_CannedReply[]             @relation("CannedReplies")
+  onCallShifts                     TH_OnCallShift[]             @relation("OnCallShifts")
 
   @@map("th_users")
   @@schema("tickethub")
@@ -1190,6 +1191,29 @@ model TH_ContactPortalToken {
   createdAt DateTime   @default(now())
 
   @@map("th_contact_portal_tokens")
+  @@schema("tickethub")
+}
+
+/// On-call rotation shift. Shifts are the source of truth — the
+/// settings page either generates them in bulk (weekly rotation between
+/// N users) or admin adds/edits individual rows. Current on-call lookup
+/// finds the row where startsAt <= now < endsAt; override shifts win
+/// over generated ones via createdAt DESC tiebreak.
+model TH_OnCallShift {
+  id        String  @id @default(cuid())
+  userId    String
+  user      TH_User @relation("OnCallShifts", fields: [userId], references: [id])
+  startsAt  DateTime
+  endsAt    DateTime
+  /// Free-text label, e.g. "weekly rotation" or "swap: Mike covering Frye".
+  label     String?
+  /// 'rotation' for generator output, 'override' for manual swaps. Used
+  /// only as a UI hint — both are queryable the same way.
+  source    String  @default("rotation")
+  createdAt DateTime @default(now())
+
+  @@index([startsAt, endsAt])
+  @@map("th_on_call_shifts")
   @@schema("tickethub")
 }
 
