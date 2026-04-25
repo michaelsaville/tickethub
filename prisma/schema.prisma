@@ -382,6 +382,14 @@ model TH_Ticket {
   recurringTemplateId String?
   recurringTemplate   TH_RecurringTicketTemplate? @relation(fields: [recurringTemplateId], references: [id])
 
+  /// Parent ticket id when this ticket is a sub-task of a larger project.
+  /// Self-relation: a ticket becomes a "project" the moment it has at
+  /// least one child. No separate model — keeps roll-up + permissions
+  /// trivial (the parent is just another ticket).
+  parentId String?
+  parent   TH_Ticket?  @relation("ParentChildTickets", fields: [parentId], references: [id])
+  children TH_Ticket[] @relation("ParentChildTickets")
+
   comments     TH_TicketComment[]
   charges      TH_Charge[]
   attachments  TH_Attachment[]
@@ -459,7 +467,14 @@ model TH_TicketPart {
 
   name        String
   asin        String?
+  /// Free-text vendor name (legacy / pre-catalog rows). New rows should
+  /// also set vendorRefId. Keep both populated so reports against pre-
+  /// catalog data still work.
   vendor      String? @default("Amazon Business")
+  /// Pointer into the TH_Vendor catalog when set. Null on legacy rows
+  /// and on quick add-from-receipt flow that bypasses the catalog.
+  vendorRefId String?
+  vendorRef   TH_Vendor? @relation("TicketPartVendor", fields: [vendorRefId], references: [id])
   vendorUrl   String?
   imageUrl    String?
   orderNumber String?
@@ -471,6 +486,10 @@ model TH_TicketPart {
 
   chargeId String?    @unique
   charge   TH_Charge? @relation(fields: [chargeId], references: [id])
+
+  /// Inverse of TH_PurchaseOrderLine.ticketPart. Null when the part
+  /// hasn't been added to a PO yet.
+  poLine   TH_PurchaseOrderLine? @relation("TicketPartPOLine")
 
   accountCode String?
 
@@ -780,6 +799,7 @@ model TH_User {
   createdTickets                   TH_Ticket[]                  @relation("CreatedTickets")
   charges                          TH_Charge[]
   approvedCharges                  TH_Charge[]                  @relation("ChargeApprover")
+  purchaseOrdersCreated            TH_PurchaseOrder[]           @relation("PurchaseOrderCreator")
   comments                         TH_TicketComment[]
   appointments                     TH_Appointment[]             @relation("TechAppointments")
   createdAppointments              TH_Appointment[]             @relation("CreatedAppointments")
@@ -1606,5 +1626,93 @@ model TH_AutomationDeferredAction {
 
   @@index([status, fireAt])
   @@map("th_automation_deferred")
+  @@schema("tickethub")
+}
+
+// ─── PROCUREMENT ──────────────────────────────────────────────────────────
+
+/// Vendor record for parts procurement. v1 is name + contact + default
+/// terms; future: per-vendor item catalog with cached cost.
+model TH_Vendor {
+  id            String  @id @default(cuid())
+  name          String  @unique
+  contactName   String?
+  contactEmail  String?
+  contactPhone  String?
+  website       String?
+  /// Net N days for this vendor's standard terms. Used to default the
+  /// expected-arrival date on new POs.
+  termsDays     Int?
+  notes         String?
+  isActive      Boolean @default(true)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  purchaseOrders TH_PurchaseOrder[]
+  ticketParts    TH_TicketPart[]    @relation("TicketPartVendor")
+
+  @@map("th_vendors")
+  @@schema("tickethub")
+}
+
+enum TH_PurchaseOrderStatus {
+  DRAFT
+  SENT
+  PARTIAL
+  RECEIVED
+  CLOSED
+  CANCELLED
+
+  @@schema("tickethub")
+}
+
+/// Purchase order — one PO per vendor, can cover parts across many
+/// tickets. PO becomes RECEIVED when every line is fully received;
+/// CLOSED is admin-marked terminal state.
+model TH_PurchaseOrder {
+  id           String                @id @default(cuid())
+  poNumber     Int                   @unique @default(autoincrement())
+  vendorId     String
+  vendor       TH_Vendor             @relation(fields: [vendorId], references: [id])
+  status       TH_PurchaseOrderStatus @default(DRAFT)
+  createdById  String
+  createdBy    TH_User               @relation("PurchaseOrderCreator", fields: [createdById], references: [id])
+  /// Free-text vendor reference number (e.g. order# / quote#).
+  externalRef  String?
+  notes        String?
+  sentAt       DateTime?
+  expectedAt   DateTime?
+  receivedAt   DateTime?
+  createdAt    DateTime               @default(now())
+  updatedAt    DateTime               @updatedAt
+
+  lines TH_PurchaseOrderLine[]
+
+  @@index([status, createdAt])
+  @@map("th_purchase_orders")
+  @@schema("tickethub")
+}
+
+/// One line on a PO. Optional 1:1 link to a TH_TicketPart so receiving
+/// the line auto-flips the part to RECEIVED. quantity / receivedQuantity
+/// drive partial-receipt math.
+model TH_PurchaseOrderLine {
+  id                String           @id @default(cuid())
+  purchaseOrderId   String
+  purchaseOrder     TH_PurchaseOrder @relation(fields: [purchaseOrderId], references: [id], onDelete: Cascade)
+  ticketPartId      String?          @unique
+  ticketPart        TH_TicketPart?   @relation("TicketPartPOLine", fields: [ticketPartId], references: [id])
+
+  description       String
+  sku               String?
+  quantity          Int              @default(1)
+  unitCost          Int              @default(0)
+  receivedQuantity  Int              @default(0)
+  notes             String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("th_purchase_order_lines")
   @@schema("tickethub")
 }

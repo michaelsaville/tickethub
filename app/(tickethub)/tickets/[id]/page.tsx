@@ -8,6 +8,7 @@ import { EditableTitle } from './EditableTitle'
 import { CommentComposer } from './CommentComposer'
 import { MergeTicketButton } from './MergeTicketButton'
 import { PageOnCallButton } from './PageOnCallButton'
+import { ProjectPanel } from './ProjectPanel'
 import { Attachments } from './Attachments'
 import { QuickCharge } from './QuickCharge'
 import { ReceiptScanner } from './ReceiptScanner'
@@ -78,6 +79,25 @@ export default async function TicketDetailPage({
       contract: true,
       asset: true,
       recurringTemplate: { select: { id: true, name: true } },
+      parent: { select: { id: true, ticketNumber: true, title: true, status: true } },
+      children: {
+        orderBy: { ticketNumber: 'asc' },
+        select: {
+          id: true,
+          ticketNumber: true,
+          title: true,
+          status: true,
+          assignedTo: { select: { id: true, name: true } },
+          charges: {
+            select: {
+              totalPrice: true,
+              timeChargedMinutes: true,
+              type: true,
+              status: true,
+            },
+          },
+        },
+      },
       assignedTo: { select: { id: true, name: true, email: true } },
       createdBy: { select: { id: true, name: true } },
       attachments: { orderBy: { createdAt: 'desc' } },
@@ -258,6 +278,36 @@ export default async function TicketDetailPage({
               ticketId={ticket.id}
               ticketNumber={ticket.ticketNumber}
               ticketTitle={ticket.title}
+            />
+          </div>
+          <div className="mt-4">
+            <ProjectPanel
+              ticketId={ticket.id}
+              parent={ticket.parent}
+              children={ticket.children.map((c) => ({
+                id: c.id,
+                ticketNumber: c.ticketNumber,
+                title: c.title,
+                status: c.status,
+                assignedTo: c.assignedTo,
+                rolledMinutes: c.charges.reduce(
+                  (s, ch) =>
+                    s +
+                    (ch.type === 'LABOR' &&
+                    (ch.status === 'BILLABLE' || ch.status === 'INVOICED')
+                      ? (ch.timeChargedMinutes ?? 0)
+                      : 0),
+                  0,
+                ),
+                rolledCents: c.charges.reduce(
+                  (s, ch) =>
+                    s +
+                    (ch.status === 'BILLABLE' || ch.status === 'INVOICED'
+                      ? ch.totalPrice
+                      : 0),
+                  0,
+                ),
+              }))}
             />
           </div>
           <dl className="th-card mt-4 space-y-3 text-xs">

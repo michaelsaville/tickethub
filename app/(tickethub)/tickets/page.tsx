@@ -27,6 +27,8 @@ type SearchParams = Promise<{
   dateField?: string
   dateFrom?: string
   dateTo?: string
+  showSubtickets?: string
+  parentId?: string
 }>
 
 export default async function TicketsPage({
@@ -87,6 +89,16 @@ export default async function TicketsPage({
 
   // Build Prisma where from effective filters
   const { where, orderBy } = buildQuery(effectiveFilters, activeView?.sort as ViewSort | null, userId)
+
+  // Hide sub-tickets by default — flatten projects so the main list isn't
+  // cluttered. Toggle with ?showSubtickets=1 (also kept on when filtering
+  // by an explicit parent via ?parentId=).
+  const showSub = sp.showSubtickets === '1' || !!sp.parentId
+  if (!showSub) {
+    where.parentId = null
+  } else if (sp.parentId) {
+    where.parentId = sp.parentId
+  }
 
   const [tickets, users, clients] = await Promise.all([
     prisma.tH_Ticket.findMany({
