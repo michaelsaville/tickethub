@@ -753,6 +753,11 @@ model TH_User {
   /// password vault in the TicketHub sidebar. Per-user opt-out.
   showVaultLink Boolean @default(true)
 
+  /// Per-user secret that authenticates the read-only ICS calendar feed
+  /// at /api/cal/{token}. Null = feed disabled. Regenerate to revoke
+  /// existing subscriptions; revoke (set to null) to fully turn it off.
+  icsToken      String? @unique
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 

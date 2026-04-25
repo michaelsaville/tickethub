@@ -79,6 +79,11 @@ const GROUPS = [
         description: 'Per-tech schedules for the dispatch board',
       },
       {
+        href: '/settings/calendar-feed',
+        title: 'Calendar Feed (ICS)',
+        description: 'Subscribe to your appointments from Outlook / Google / Apple',
+      },
+      {
         href: '/settings/vault',
         title: 'Password Vault Shortcut',
         description: 'Show or hide the DocHub vault link in the sidebar',
