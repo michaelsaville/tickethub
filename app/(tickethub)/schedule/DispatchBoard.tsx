@@ -7,6 +7,7 @@ import type { DaySchedule } from '@/app/lib/actions/working-hours'
 import { UnscheduledQueue } from './UnscheduledQueue'
 import { AppointmentBlock } from './AppointmentBlock'
 import { SchedulerViewTabs } from './SchedulerViewTabs'
+import { PresenceDot } from '@/app/components/PresenceDot'
 
 // ─── Types ───────────────────────────────────────────────────────────────
 
@@ -367,7 +368,8 @@ export function DispatchBoard({
                           style={{ width: 140 }}
                         >
                           {/* Tech name sub-header — sticky below day header */}
-                          <div className="sticky top-[3.5rem] z-[9] flex h-7 items-center justify-center border-b border-th-border bg-th-elevated px-1 text-center">
+                          <div className="sticky top-[3.5rem] z-[9] flex h-7 items-center justify-center gap-1 border-b border-th-border bg-th-elevated px-1 text-center">
+                            <PresenceDot userId={tech.id} size={6} />
                             <span
                               className="block truncate font-mono text-[11px] font-medium text-slate-200"
                               title={tech.name}

@@ -767,6 +767,12 @@ model TH_User {
   /// existing subscriptions; revoke (set to null) to fully turn it off.
   icsToken      String? @unique
 
+  /// Last heartbeat from any open TicketHub tab. Used to compute
+  /// presence (active/idle/away) for the dispatch board + on-call panel.
+  /// Updated by POST /api/presence/heartbeat every ~60s while a tab is
+  /// foregrounded; absence is treated as 'away'.
+  lastHeartbeatAt DateTime?
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 

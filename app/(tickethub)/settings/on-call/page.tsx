@@ -4,6 +4,7 @@ import { prisma } from '@/app/lib/prisma'
 import { requireAuth, hasMinRole } from '@/app/lib/api-auth'
 import { getCurrentOnCall } from '@/app/lib/on-call'
 import { OnCallEditor } from './OnCallEditor'
+import { PresenceDot } from '@/app/components/PresenceDot'
 
 export const dynamic = 'force-dynamic'
 
@@ -56,6 +57,7 @@ export default async function OnCallSettingsPage() {
         </div>
         {current ? (
           <div className="mt-2 flex items-baseline gap-3">
+            <PresenceDot userId={current.userId} size={10} />
             <span className="font-mono text-xl text-amber-400">
               {current.name}
             </span>
