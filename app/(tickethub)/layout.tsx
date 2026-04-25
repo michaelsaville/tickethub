@@ -16,12 +16,14 @@ export default async function TicketHubLayout({
 }) {
   const session = await getServerSession(authOptions)
   let showVaultLink = false
+  let isAdmin = false
   if (session?.user?.id) {
     const u = await prisma.tH_User.findUnique({
       where: { id: session.user.id },
-      select: { showVaultLink: true },
+      select: { showVaultLink: true, role: true },
     })
     showVaultLink = u?.showVaultLink ?? true
+    isAdmin = u?.role === 'TICKETHUB_ADMIN' || u?.role === 'GLOBAL_ADMIN'
   }
 
   const [
@@ -30,6 +32,7 @@ export default async function TicketHubLayout({
     unpaidInvoiceCount,
     pendingEstimateCount,
     unreadNotificationCount,
+    pendingTimeApprovalCount,
   ] = await Promise.all([
     prisma.tH_PendingInboundEmail.count({ where: { status: 'PENDING' } }),
     prisma.tH_Ticket.count({ where: { status: 'NEW' } }),
@@ -40,6 +43,11 @@ export default async function TicketHubLayout({
     session?.user?.id
       ? prisma.tH_Notification.count({
           where: { userId: session.user.id, isRead: false },
+        })
+      : Promise.resolve(0),
+    isAdmin
+      ? prisma.tH_Charge.count({
+          where: { status: 'PENDING_REVIEW', type: 'LABOR' },
         })
       : Promise.resolve(0),
   ])
@@ -62,11 +70,13 @@ export default async function TicketHubLayout({
       <div className="hidden md:block">
         <Sidebar
           showVaultLink={showVaultLink}
+          showTimeApprovals={isAdmin}
           inboxCount={pendingInboxCount}
           ticketCount={newTicketCount}
           invoiceCount={unpaidInvoiceCount}
           estimateCount={pendingEstimateCount}
           notificationCount={unreadNotificationCount}
+          timeApprovalCount={pendingTimeApprovalCount}
         />
       </div>
       <main className="flex flex-1 flex-col overflow-hidden">

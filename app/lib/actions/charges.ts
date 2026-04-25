@@ -8,6 +8,7 @@ import { authOptions } from '@/app/lib/auth'
 import { resolveUnitPrice } from '@/app/lib/billing'
 import { emit } from '@/app/lib/automation/bus'
 import { EVENT_TYPES } from '@/app/lib/automation/events'
+import { TIME_APPROVAL_ENABLED } from '@/app/lib/time-approvals-config'
 
 export type ChargeResult = { ok: true } | { ok: false; error: string }
 
@@ -151,6 +152,12 @@ export async function createCharge(
             select: { type: true },
           })
 
+    const timeApprovalRequired =
+      chargeType === 'LABOR' && TIME_APPROVAL_ENABLED
+    const initialStatus: TH_ChargeStatus = timeApprovalRequired
+      ? 'PENDING_REVIEW'
+      : 'BILLABLE'
+
     const createdChargeId = await prisma.$transaction(async (tx) => {
       const charge = await tx.tH_Charge.create({
         data: {
@@ -159,7 +166,7 @@ export async function createCharge(
           itemId: item.id,
           technicianId: userId,
           type: chargeType,
-          status: 'BILLABLE',
+          status: initialStatus,
           description: input.description?.trim() || null,
           timeSpentMinutes,
           timeChargedMinutes,

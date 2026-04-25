@@ -89,9 +89,10 @@ function ChargeRow({
   const [isPending, startTransition] = useTransition()
 
   const locked = status === 'INVOICED' || status === 'LOCKED'
+  const pendingReview = status === 'PENDING_REVIEW'
 
   function toggle() {
-    if (locked) return
+    if (locked || pendingReview) return
     const next: TH_ChargeStatus =
       status === 'BILLABLE' ? 'NOT_BILLABLE' : 'BILLABLE'
     setErr(null)
@@ -147,14 +148,24 @@ function ChargeRow({
           </div>
         </div>
       )}
-      <button
-        type="button"
-        onClick={toggle}
-        disabled={isPending || locked}
-        className={statusButtonClass(status, locked)}
-      >
-        {status.replace(/_/g, ' ')}
-      </button>
+      {pendingReview ? (
+        <a
+          href="/time-approvals"
+          title="Awaiting admin approval — open the queue"
+          className="rounded-full bg-amber-500/20 px-3 py-0.5 font-mono text-[10px] uppercase tracking-wider text-amber-300 hover:bg-amber-500/30"
+        >
+          ⏳ pending
+        </a>
+      ) : (
+        <button
+          type="button"
+          onClick={toggle}
+          disabled={isPending || locked}
+          className={statusButtonClass(status, locked)}
+        >
+          {status.replace(/_/g, ' ')}
+        </button>
+      )}
     </li>
   )
 }

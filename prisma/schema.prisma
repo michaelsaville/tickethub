@@ -224,6 +224,7 @@ model TH_Item {
 
 enum TH_ChargeStatus {
   NOT_BILLABLE
+  PENDING_REVIEW
   BILLABLE
   INVOICED
   LOCKED
@@ -252,6 +253,13 @@ model TH_Charge {
   technician   TH_User?    @relation(fields: [technicianId], references: [id])
   invoiceId    String?
   invoice      TH_Invoice? @relation(fields: [invoiceId], references: [id])
+
+  /// Set when an admin moves a PENDING_REVIEW labor charge to BILLABLE.
+  /// Lets us audit who signed off + when, and surface "approved by X" in
+  /// the timeline. Null on charges created when time-approval is disabled.
+  approvedAt   DateTime?
+  approvedById String?
+  approvedBy   TH_User?    @relation("ChargeApprover", fields: [approvedById], references: [id])
 
   type        TH_ChargeType
   status      TH_ChargeStatus @default(BILLABLE)
@@ -765,6 +773,7 @@ model TH_User {
   assignedTickets                  TH_Ticket[]                  @relation("AssignedTickets")
   createdTickets                   TH_Ticket[]                  @relation("CreatedTickets")
   charges                          TH_Charge[]
+  approvedCharges                  TH_Charge[]                  @relation("ChargeApprover")
   comments                         TH_TicketComment[]
   appointments                     TH_Appointment[]             @relation("TechAppointments")
   createdAppointments              TH_Appointment[]             @relation("CreatedAppointments")

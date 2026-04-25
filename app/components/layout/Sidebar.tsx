@@ -44,18 +44,22 @@ const DOCHUB_URL =
 
 export function Sidebar({
   showVaultLink = false,
+  showTimeApprovals = false,
   inboxCount = 0,
   ticketCount = 0,
   invoiceCount = 0,
   estimateCount = 0,
   notificationCount = 0,
+  timeApprovalCount = 0,
 }: {
   showVaultLink?: boolean
+  showTimeApprovals?: boolean
   inboxCount?: number
   ticketCount?: number
   invoiceCount?: number
   estimateCount?: number
   notificationCount?: number
+  timeApprovalCount?: number
 }) {
   const pathname = usePathname()
 
@@ -65,6 +69,18 @@ export function Sidebar({
   if (invoiceCount > 0) badgeCounts['/invoices'] = invoiceCount
   if (estimateCount > 0) badgeCounts['/estimates'] = estimateCount
   if (notificationCount > 0) badgeCounts['/notifications'] = notificationCount
+  if (timeApprovalCount > 0) badgeCounts['/time-approvals'] = timeApprovalCount
+
+  const secondaryNav = showTimeApprovals
+    ? [
+        ...SECONDARY_NAV,
+        {
+          href: '/time-approvals',
+          label: 'Time Approvals',
+          icon: '⏳',
+        } as const,
+      ]
+    : SECONDARY_NAV
 
   return (
     <aside className="flex h-screen w-60 flex-col border-r border-th-border bg-th-surface">
@@ -90,7 +106,7 @@ export function Sidebar({
         </ul>
 
         <div className="mt-6 border-t border-th-border pt-4">
-          <NavGroup items={SECONDARY_NAV} pathname={pathname} />
+          <NavGroup items={secondaryNav} pathname={pathname} badges={badgeCounts} />
           {showVaultLink && (
             <ul className="mt-0.5 space-y-0.5">
               <li>
@@ -140,6 +156,7 @@ const RED_BADGE_ROUTES = new Set([
   '/estimates',
   '/inbox',
   '/notifications',
+  '/time-approvals',
 ])
 
 function NavGroup({
