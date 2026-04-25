@@ -29,6 +29,23 @@ export async function notifyUser(
     category?: 'ASSIGNED' | 'COMMENT' | 'SLA' | 'NEW_HIGH' | 'INFO' | 'TEST'
   },
 ): Promise<void> {
+  // In-app row first — written unconditionally regardless of notificationMode
+  // so the bell still shows a record even when push delivery is suppressed
+  // (OFF_DUTY mode, working-mode INFO suppression, etc.).
+  try {
+    await prisma.tH_Notification.create({
+      data: {
+        userId,
+        type: opts.category ?? 'INFO',
+        title: opts.title,
+        body: opts.body,
+        data: opts.url ? { url: opts.url } : undefined,
+      },
+    })
+  } catch (e) {
+    console.error('[notify-server] in-app write failed', e)
+  }
+
   try {
     const user = await prisma.tH_User.findUnique({
       where: { id: userId },

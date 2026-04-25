@@ -29,16 +29,18 @@ const FAB_ACTIONS_GLOBAL: FabAction[] = [
   { href: '/clients/new', label: 'New client', icon: '👥' },
   { href: '/invoices/new', label: 'New invoice', icon: '🧾' },
   { href: '/schedule', label: 'Schedule', icon: '📅' },
+  { href: '/notifications', label: 'Notifications', icon: '🔔' },
   { href: '/tickets?q=', label: 'Search tickets', icon: '🔎' },
 ]
 
 /** When on a ticket detail page, show ticket-scoped actions instead. */
-function getTicketFabActions(ticketId: string): FabAction[] {
+function getTicketFabActions(_ticketId: string): FabAction[] {
   return [
     { href: `#add-note`, label: 'Add Note', icon: '📝' },
     { href: `#log-time`, label: 'Log Time', icon: '⏱️' },
     { href: `#add-part`, label: 'Add Part', icon: '🔧' },
     { href: `#add-photo`, label: 'Photo', icon: '📷' },
+    { href: `/notifications`, label: 'Notifications', icon: '🔔' },
   ]
 }
 

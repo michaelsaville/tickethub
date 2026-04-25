@@ -6,6 +6,7 @@ import { usePathname } from 'next/navigation'
 const PRIMARY_NAV = [
   { href: '/dashboard', label: 'Dashboard', icon: '🏠' },
   { href: '/inbox', label: 'Inbox', icon: '📥' },
+  { href: '/notifications', label: 'Notifications', icon: '🔔' },
   { href: '/tickets', label: 'Tickets', icon: '🎫' },
   { href: '/clients', label: 'Clients', icon: '👥' },
   { href: '/estimates', label: 'Estimates', icon: '📋' },
@@ -22,7 +23,7 @@ const SAVED_VIEWS = [
 ] as const
 
 const SECONDARY_NAV = [
-  { href: '/reminders', label: 'Reminders', icon: '🔔' },
+  { href: '/reminders', label: 'Reminders', icon: '⏰' },
   { href: '/kb', label: 'Knowledge Base', icon: '📚' },
   { href: '/schedule', label: 'Schedule', icon: '📅' },
   { href: '/fuel-receipts', label: 'Fuel Receipts', icon: '⛽' },
@@ -47,12 +48,14 @@ export function Sidebar({
   ticketCount = 0,
   invoiceCount = 0,
   estimateCount = 0,
+  notificationCount = 0,
 }: {
   showVaultLink?: boolean
   inboxCount?: number
   ticketCount?: number
   invoiceCount?: number
   estimateCount?: number
+  notificationCount?: number
 }) {
   const pathname = usePathname()
 
@@ -61,6 +64,7 @@ export function Sidebar({
   if (ticketCount > 0) badgeCounts['/tickets'] = ticketCount
   if (invoiceCount > 0) badgeCounts['/invoices'] = invoiceCount
   if (estimateCount > 0) badgeCounts['/estimates'] = estimateCount
+  if (notificationCount > 0) badgeCounts['/notifications'] = notificationCount
 
   return (
     <aside className="flex h-screen w-60 flex-col border-r border-th-border bg-th-surface">
@@ -131,7 +135,12 @@ function ModuleSwitcher() {
 }
 
 /** Routes where the badge should be red (money / action-required). */
-const RED_BADGE_ROUTES = new Set(['/invoices', '/estimates', '/inbox'])
+const RED_BADGE_ROUTES = new Set([
+  '/invoices',
+  '/estimates',
+  '/inbox',
+  '/notifications',
+])
 
 function NavGroup({
   items,

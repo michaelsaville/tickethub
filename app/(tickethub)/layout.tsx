@@ -24,17 +24,25 @@ export default async function TicketHubLayout({
     showVaultLink = u?.showVaultLink ?? true
   }
 
-  const [pendingInboxCount, newTicketCount, unpaidInvoiceCount, pendingEstimateCount] =
-    await Promise.all([
-      prisma.tH_PendingInboundEmail.count({ where: { status: 'PENDING' } }),
-      prisma.tH_Ticket.count({ where: { status: 'NEW' } }),
-      prisma.tH_Invoice.count({
-        where: { status: { in: ['SENT', 'VIEWED', 'OVERDUE'] } },
-      }),
-      prisma.tH_Estimate.count({
-        where: { status: { in: ['SENT'] } },
-      }),
-    ])
+  const [
+    pendingInboxCount,
+    newTicketCount,
+    unpaidInvoiceCount,
+    pendingEstimateCount,
+    unreadNotificationCount,
+  ] = await Promise.all([
+    prisma.tH_PendingInboundEmail.count({ where: { status: 'PENDING' } }),
+    prisma.tH_Ticket.count({ where: { status: 'NEW' } }),
+    prisma.tH_Invoice.count({
+      where: { status: { in: ['SENT', 'VIEWED', 'OVERDUE'] } },
+    }),
+    prisma.tH_Estimate.count({ where: { status: { in: ['SENT'] } } }),
+    session?.user?.id
+      ? prisma.tH_Notification.count({
+          where: { userId: session.user.id, isRead: false },
+        })
+      : Promise.resolve(0),
+  ])
 
   const timer = await getMyTimer()
   const timerBarProps = timer
@@ -58,6 +66,7 @@ export default async function TicketHubLayout({
           ticketCount={newTicketCount}
           invoiceCount={unpaidInvoiceCount}
           estimateCount={pendingEstimateCount}
+          notificationCount={unreadNotificationCount}
         />
       </div>
       <main className="flex flex-1 flex-col overflow-hidden">
