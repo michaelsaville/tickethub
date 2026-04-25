@@ -76,6 +76,12 @@ export default async function ReportsPage() {
               title: 'Unbilled Time',
               desc: 'Billable charges not yet on an invoice — revenue at risk',
             },
+            {
+              href: '/reports/csat',
+              icon: '⭐',
+              title: 'CSAT',
+              desc: 'Average score, response rate, and recent client feedback',
+            },
           ].map((r) => (
             <a
               key={r.href}

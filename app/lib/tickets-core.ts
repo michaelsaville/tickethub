@@ -8,6 +8,7 @@ import { isPausingStatus } from '@/app/lib/sla'
 import { computeSlaDates } from '@/app/lib/sla-server'
 import { notifyAdmins, notifyUser, ticketUrl } from '@/app/lib/notify-server'
 import { sendTicketClientEmail } from '@/app/lib/ticket-email'
+import { sendCsatSurvey } from '@/app/lib/csat-survey'
 import { emit } from '@/app/lib/automation/bus'
 import { EVENT_TYPES } from '@/app/lib/automation/events'
 
@@ -276,6 +277,9 @@ export async function updateTicketStatusCore(
           slaResumed: result.slaResumed,
         },
       })
+      if (result.to === 'RESOLVED' || result.to === 'CLOSED') {
+        void sendCsatSurvey(ticketId)
+      }
     }
     return { ok: true }
   } catch (e) {

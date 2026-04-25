@@ -382,6 +382,7 @@ model TH_Ticket {
   signatures   TH_Signature[]
   tags         TH_TicketTag[]
   appointments TH_Appointment[]
+  csatSurvey   TH_CsatSurvey?
 
   @@index([recurringTemplateId, createdAt])
   @@map("th_tickets")
@@ -1189,6 +1190,27 @@ model TH_ContactPortalToken {
   createdAt DateTime   @default(now())
 
   @@map("th_contact_portal_tokens")
+  @@schema("tickethub")
+}
+
+/// CSAT survey sent to the ticket contact after the ticket transitions
+/// to RESOLVED or CLOSED for the first time. One row per ticket lifetime
+/// — re-opens followed by re-close do not generate a second survey.
+/// Token-authenticated public response page at /csat/[token].
+model TH_CsatSurvey {
+  id          String    @id @default(cuid())
+  ticketId    String    @unique
+  ticket      TH_Ticket @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+  token       String    @unique
+  sentAt      DateTime  @default(now())
+  toEmail     String
+  /// 1–5 stars; null until the contact responds.
+  score       Int?
+  comment     String?
+  respondedAt DateTime?
+
+  @@index([respondedAt])
+  @@map("th_csat_surveys")
   @@schema("tickethub")
 }
 

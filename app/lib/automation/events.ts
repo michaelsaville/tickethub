@@ -58,6 +58,7 @@ export const EVENT_TYPES = {
   TICKET_COMMENT_ADDED: 'ticket.comment_added',
   TICKET_SLA_THRESHOLD_CROSSED: 'ticket.sla_threshold_crossed',
   TICKET_REOPENED: 'ticket.reopened',
+  CSAT_RESPONSE_RECEIVED: 'ticket.csat_response_received',
 
   // Charge
   CHARGE_ADDED: 'charge.added',
