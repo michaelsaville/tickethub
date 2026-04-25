@@ -27,6 +27,7 @@ const SECONDARY_NAV = [
   { href: '/kb', label: 'Knowledge Base', icon: '📚' },
   { href: '/schedule', label: 'Schedule', icon: '📅' },
   { href: '/fuel-receipts', label: 'Fuel Receipts', icon: '⛽' },
+  { href: '/purchase-orders', label: 'Purchase Orders', icon: '📦' },
 ] as const
 
 const DOCHUB_VAULT_URL =

@@ -28,6 +28,11 @@ const GROUPS = [
         title: 'Recurring Tickets',
         description: 'Auto-create tickets on a daily/weekly/monthly schedule',
       },
+      {
+        href: '/vendors',
+        title: 'Vendors',
+        description: 'Catalog of suppliers used on POs and parts',
+      },
     ],
   },
   {
