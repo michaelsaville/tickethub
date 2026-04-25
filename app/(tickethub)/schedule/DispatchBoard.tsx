@@ -6,6 +6,7 @@ import { createAppointment, moveAppointment, resizeAppointment } from '@/app/lib
 import type { DaySchedule } from '@/app/lib/actions/working-hours'
 import { UnscheduledQueue } from './UnscheduledQueue'
 import { AppointmentBlock } from './AppointmentBlock'
+import { SchedulerViewTabs } from './SchedulerViewTabs'
 
 // ─── Types ───────────────────────────────────────────────────────────────
 
@@ -296,7 +297,8 @@ export function DispatchBoard({
               {formatWeekLabel(weekStart)}
             </span>
           </div>
-          <div className="flex gap-2">
+          <div className="flex items-center gap-2">
+            <SchedulerViewTabs current="week" />
             <button
               onClick={goToday}
               className="rounded bg-amber-600/30 px-3 py-1 text-sm font-medium text-amber-300 hover:bg-amber-600/50"
