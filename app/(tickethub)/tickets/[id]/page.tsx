@@ -6,6 +6,7 @@ import { SlaBadge } from '@/app/components/SlaBadge'
 import { TicketProperties } from './TicketProperties'
 import { EditableTitle } from './EditableTitle'
 import { CommentComposer } from './CommentComposer'
+import { MergeTicketButton } from './MergeTicketButton'
 import { Attachments } from './Attachments'
 import { QuickCharge } from './QuickCharge'
 import { ReceiptScanner } from './ReceiptScanner'
@@ -99,7 +100,19 @@ export default async function TicketDetailPage({
       },
     },
   })
-  if (!ticket || ticket.deletedAt) notFound()
+  if (!ticket) notFound()
+  if (ticket.deletedAt) {
+    // If this ticket was merged into another, redirect there. The
+    // merge action leaves a single MERGED_AWAY event on the loser as
+    // a forwarding pointer.
+    const mergedAway = ticket.timeline.find((e) => e.type === 'MERGED_AWAY')
+    if (mergedAway?.data && typeof mergedAway.data === 'object') {
+      const data = mergedAway.data as Record<string, unknown>
+      const toId = data.toTicketId
+      if (typeof toId === 'string') redirect(`/tickets/${toId}`)
+    }
+    notFound()
+  }
 
   // Clear unread flag on staff view
   if (ticket.isUnread) {
@@ -228,6 +241,15 @@ export default async function TicketDetailPage({
                     }
                   : null
               }
+            />
+          </div>
+          <div className="mt-4">
+            <MergeTicketButton
+              ticketId={ticket.id}
+              ticketNumber={ticket.ticketNumber}
+              ticketTitle={ticket.title}
+              clientId={ticket.client.id}
+              clientName={ticket.client.name}
             />
           </div>
           <dl className="th-card mt-4 space-y-3 text-xs">
@@ -516,6 +538,12 @@ function EventRow({
     label = `Title changed`
   } else if (event.type === 'MENTION') {
     label = `Mentioned a teammate`
+  } else if (event.type === 'MERGE_INTO') {
+    const num = data.fromTicketNumber
+    label = num != null ? `Merged in #${String(num)}` : 'Merged in another ticket'
+  } else if (event.type === 'MERGED_AWAY') {
+    const num = data.toTicketNumber
+    label = num != null ? `Merged into #${String(num)}` : 'Merged into another ticket'
   }
   return (
     <div className="text-xs text-th-text-secondary">
