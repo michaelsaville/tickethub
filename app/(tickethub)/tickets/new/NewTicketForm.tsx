@@ -45,11 +45,15 @@ export function NewTicketForm({
   techs,
   sites,
   initialClientId,
+  initialTitle = '',
+  initialDescription = '',
 }: {
   clients: Client[]
   techs: Tech[]
   sites: SiteWithCoords[]
   initialClientId: string
+  initialTitle?: string
+  initialDescription?: string
 }) {
   const [state, formAction] = useFormState<CreateTicketResult | null, FormData>(
     createTicket,
@@ -301,6 +305,7 @@ export function NewTicketForm({
             name="title"
             type="text"
             required
+            defaultValue={initialTitle}
             className="th-input"
             placeholder="Brief summary of the issue"
           />
@@ -317,6 +322,7 @@ export function NewTicketForm({
             id="description"
             name="description"
             rows={8}
+            defaultValue={initialDescription}
             className="th-input resize-y"
             placeholder="What's going on? Include error messages, steps taken, client-reported details."
           />

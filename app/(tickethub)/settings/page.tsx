@@ -44,6 +44,11 @@ const GROUPS = [
         description: 'Saved comment text — type /key in the composer to insert',
       },
       {
+        href: '/settings/bookmarklet',
+        title: 'Create-from-Email Bookmarklet',
+        description: 'Turn any web page or email into a new ticket in one click',
+      },
+      {
         href: '/settings/invoice-template',
         title: 'Invoice Template',
         description: 'Customize invoice PDF layout, colors, and logo',

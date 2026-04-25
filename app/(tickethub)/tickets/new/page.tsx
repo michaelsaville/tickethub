@@ -9,7 +9,12 @@ export const dynamic = 'force-dynamic'
 export default async function NewTicketPage({
   searchParams,
 }: {
-  searchParams: Promise<{ clientId?: string }>
+  searchParams: Promise<{
+    clientId?: string
+    title?: string
+    description?: string
+    contactEmail?: string
+  }>
 }) {
   const { error } = await requireAuth()
   if (error) redirect('/api/auth/signin')
@@ -38,7 +43,25 @@ export default async function NewTicketPage({
   ])
 
   const sp = await searchParams
-  const initialClientId = sp.clientId ?? ''
+  let initialClientId = sp.clientId ?? ''
+
+  // Bookmarklet prefill: when contactEmail is given, look up the matching
+  // active TH_Contact and pre-select their client. Best-effort — silently
+  // skips when no contact matches.
+  if (!initialClientId && sp.contactEmail) {
+    const email = sp.contactEmail.trim().toLowerCase()
+    if (email) {
+      const contact = await prisma.tH_Contact.findFirst({
+        where: {
+          email: { equals: email, mode: 'insensitive' },
+          isActive: true,
+          client: { isActive: true },
+        },
+        select: { clientId: true },
+      })
+      if (contact) initialClientId = contact.clientId
+    }
+  }
 
   return (
     <div className="p-6">
@@ -63,6 +86,8 @@ export default async function NewTicketPage({
           longitude: s.longitude!,
         }))}
         initialClientId={initialClientId}
+        initialTitle={sp.title ?? ''}
+        initialDescription={sp.description ?? ''}
       />
     </div>
   )
