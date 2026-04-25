@@ -27,6 +27,12 @@ const BOARDS = [
   'Workstation For Sale',
 ] as const
 
+const CLOSING_STATUSES = new Set<TH_TicketStatus>([
+  'RESOLVED',
+  'CLOSED',
+  'CANCELLED',
+])
+
 export function TicketProperties({
   ticketId,
   status: initialStatus,
@@ -37,6 +43,7 @@ export function TicketProperties({
   type,
   techs,
   contracts,
+  timerActiveOnThisTicket = false,
 }: {
   ticketId: string
   status: TH_TicketStatus
@@ -47,6 +54,7 @@ export function TicketProperties({
   type: TH_TicketType
   techs: Array<{ id: string; name: string }>
   contracts: Array<{ id: string; name: string; type: string; isGlobal: boolean }>
+  timerActiveOnThisTicket?: boolean
 }) {
   const router = useRouter()
   const [status, setStatus] = useState(initialStatus)
@@ -57,6 +65,8 @@ export function TicketProperties({
   const [isPending, startTransition] = useTransition()
   const [err, setErr] = useState<string | null>(null)
   const [queuedMsg, setQueuedMsg] = useState<string | null>(null)
+  const [pendingCloseStatus, setPendingCloseStatus] =
+    useState<TH_TicketStatus | null>(null)
 
   function patch(
     input: Omit<EnqueueInput, 'method'>,
@@ -78,6 +88,20 @@ export function TicketProperties({
   }
 
   function changeStatus(v: TH_TicketStatus) {
+    if (
+      timerActiveOnThisTicket &&
+      CLOSING_STATUSES.has(v) &&
+      v !== status
+    ) {
+      // Don't optimistically update yet — keep the dropdown showing current
+      // status until the user confirms or cancels the prompt.
+      setPendingCloseStatus(v)
+      return
+    }
+    applyStatusChange(v)
+  }
+
+  function applyStatusChange(v: TH_TicketStatus) {
     setStatus(v)
     patch(
       {
@@ -273,6 +297,74 @@ export function TicketProperties({
           {queuedMsg}
         </div>
       )}
+
+      {pendingCloseStatus && (
+        <TimerStillRunningModal
+          targetStatus={pendingCloseStatus}
+          onChangeAnyway={() => {
+            const v = pendingCloseStatus
+            setPendingCloseStatus(null)
+            applyStatusChange(v)
+          }}
+          onCancel={() => setPendingCloseStatus(null)}
+        />
+      )}
+    </div>
+  )
+}
+
+function TimerStillRunningModal({
+  targetStatus,
+  onChangeAnyway,
+  onCancel,
+}: {
+  targetStatus: TH_TicketStatus
+  onChangeAnyway: () => void
+  onCancel: () => void
+}) {
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4"
+      onClick={onCancel}
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="timer-warning-title"
+    >
+      <div
+        className="th-card w-full max-w-md space-y-3 border-amber-500/40"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <h3
+          id="timer-warning-title"
+          className="font-mono text-[10px] uppercase tracking-wider text-amber-400"
+        >
+          Timer still running
+        </h3>
+        <p className="text-sm text-slate-200">
+          You have an active timer on this ticket. Changing the status to{' '}
+          <span className="font-mono text-accent">
+            {targetStatus.replace(/_/g, ' ')}
+          </span>{' '}
+          won&apos;t stop the timer — you&apos;ll keep accruing time.
+        </p>
+        <div className="flex flex-wrap items-center gap-2">
+          <button
+            type="button"
+            onClick={onCancel}
+            className="th-btn-primary text-sm"
+            autoFocus
+          >
+            Wait — let me stop the timer first
+          </button>
+          <button
+            type="button"
+            onClick={onChangeAnyway}
+            className="th-btn-ghost text-sm"
+          >
+            Change anyway, leave timer running
+          </button>
+        </div>
+      </div>
     </div>
   )
 }

@@ -4,6 +4,7 @@ import { prisma } from '@/app/lib/prisma'
 import { requireAuth, hasMinRole } from '@/app/lib/api-auth'
 import { SlaBadge } from '@/app/components/SlaBadge'
 import { TicketProperties } from './TicketProperties'
+import { EditableTitle } from './EditableTitle'
 import { CommentComposer } from './CommentComposer'
 import { Attachments } from './Attachments'
 import { QuickCharge } from './QuickCharge'
@@ -161,7 +162,7 @@ export default async function TicketDetailPage({
           <span className="font-mono text-sm text-th-text-muted">
             #{ticket.ticketNumber}
           </span>
-          <h1 className="font-mono text-2xl text-slate-100">{ticket.title}</h1>
+          <EditableTitle ticketId={ticket.id} initialTitle={ticket.title} />
         </div>
         <div className="mt-1 text-xs text-th-text-secondary">
           Opened by {ticket.createdBy.name} ·{' '}
@@ -204,6 +205,7 @@ export default async function TicketDetailPage({
               type: c.type,
               isGlobal: c.isGlobal,
             }))}
+            timerActiveOnThisTicket={Boolean(myTimer && myTimer.ticketId === ticket.id)}
           />
           <div className="mt-3 rounded-lg border border-th-border/50 bg-th-surface p-3">
             <p className="mb-1.5 font-mono text-[10px] uppercase tracking-wider text-th-text-muted">Tags</p>
@@ -510,6 +512,8 @@ function EventRow({
     label = data.to ? `Assigned` : `Unassigned`
   } else if (event.type === 'CREATED') {
     label = 'Ticket created'
+  } else if (event.type === 'TITLE_CHANGE') {
+    label = `Title changed`
   }
   return (
     <div className="text-xs text-th-text-secondary">

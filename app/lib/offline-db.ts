@@ -15,6 +15,7 @@ export type SyncOperationType =
   | 'UPDATE_ASSIGNEE'
   | 'UPDATE_CONTRACT'
   | 'UPDATE_BOARD'
+  | 'UPDATE_TITLE'
   | 'ADD_CHARGE'
   | 'ADD_PART'
   | 'ATTACH_PHOTO'
