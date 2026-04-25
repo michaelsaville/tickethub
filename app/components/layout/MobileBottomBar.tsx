@@ -51,11 +51,13 @@ export function MobileBottomBar({
   ticketCount = 0,
   invoiceCount = 0,
   estimateCount = 0,
+  notificationCount = 0,
 }: {
   inboxCount?: number
   ticketCount?: number
   invoiceCount?: number
   estimateCount?: number
+  notificationCount?: number
 }) {
   const mobileBadges: Record<string, number> = {}
   if (inboxCount > 0) mobileBadges['/inbox'] = inboxCount
@@ -141,6 +143,12 @@ export function MobileBottomBar({
                   }`}
                 >
                   +
+                  {notificationCount > 0 && !open && (
+                    <span
+                      aria-label={`${notificationCount} unread notifications`}
+                      className="absolute right-0 top-0 h-3 w-3 rounded-full bg-red-500 ring-2 ring-th-base"
+                    />
+                  )}
                 </button>
               </div>
             )

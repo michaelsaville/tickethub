@@ -79,6 +79,7 @@ export default async function TicketHubLayout({
         ticketCount={newTicketCount}
         invoiceCount={unpaidInvoiceCount}
         estimateCount={pendingEstimateCount}
+        notificationCount={unreadNotificationCount}
       />
       <SyncStatusBadge />
       <LocationTracker />
