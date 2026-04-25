@@ -778,6 +778,7 @@ model TH_User {
   automationRulesUpdated           TH_AutomationRule[]          @relation("AutomationRuleUpdater")
   automationRulesApproved          TH_AutomationRule[]          @relation("AutomationRuleApprover")
   automationRulesRejected          TH_AutomationRule[]          @relation("AutomationRuleRejecter")
+  cannedReplies                    TH_CannedReply[]             @relation("CannedReplies")
 
   @@map("th_users")
   @@schema("tickethub")
@@ -956,6 +957,38 @@ model TH_KBArticle {
   updatedAt      DateTime @updatedAt
 
   @@map("th_kb_articles")
+  @@schema("tickethub")
+}
+
+// ─── CANNED REPLIES ───────────────────────────────────────────────────────
+// Saved replies for the `/` autocomplete in the ticket comment composer.
+// Personal (ownerId set, isShared=false) or shared (ownerId null, isShared=true,
+// admin-managed). Picker filters shared + own and ranks by useCount desc.
+
+model TH_CannedReply {
+  id        String   @id @default(cuid())
+  /// Short trigger token for the `/` autocomplete (e.g. "ack", "reset").
+  /// Lowercase, no spaces. Unique per ownerId; shared rows (ownerId null)
+  /// can collide on key — admins keep them clean by hand.
+  key       String
+  title     String
+  body      String
+  /// Optional grouping label for the picker UI ("Greetings", "Resolutions").
+  category  String?
+  /// True = visible to all techs. Only TICKETHUB_ADMIN+ can create/edit
+  /// shared replies. False = visible only to ownerId.
+  isShared  Boolean  @default(false)
+  /// Owner. NULL when shared and not personally owned.
+  ownerId   String?
+  owner     TH_User? @relation("CannedReplies", fields: [ownerId], references: [id])
+  /// Incremented each insert from the picker — used to rank the list.
+  useCount  Int      @default(0)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([ownerId, key])
+  @@index([isShared, useCount])
+  @@map("th_canned_replies")
   @@schema("tickethub")
 }
 

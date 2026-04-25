@@ -1,22 +1,151 @@
 'use client'
 
-import { useState, useTransition } from 'react'
+import { useEffect, useMemo, useRef, useState, useTransition } from 'react'
 import { useRouter } from 'next/navigation'
 import { enqueueRequest } from '@/app/lib/sync-queue'
 import { addPendingComment } from '@/app/lib/pending-comments-store'
 import { useVoiceInput } from '@/app/hooks/useVoiceInput'
+import {
+  listCannedReplies,
+  incrementCannedReplyUse,
+  type CannedReplyDTO,
+} from '@/app/lib/actions/canned-replies'
+import { CannedReplyPicker } from './CannedReplyPicker'
+
+type TriggerInfo = { query: string; start: number; end: number }
+
+function detectTrigger(text: string, caret: number): TriggerInfo | null {
+  const before = text.slice(0, caret)
+  const lineStart = before.lastIndexOf('\n') + 1
+  const lineBefore = text.slice(lineStart, caret)
+  if (!lineBefore.startsWith('/')) return null
+  if (/\s/.test(lineBefore.slice(1))) return null
+  return {
+    query: lineBefore.slice(1),
+    start: lineStart,
+    end: caret,
+  }
+}
 
 export function CommentComposer({ ticketId }: { ticketId: string }) {
   const router = useRouter()
+  const textareaRef = useRef<HTMLTextAreaElement>(null)
   const [body, setBody] = useState('')
   const [isInternal, setIsInternal] = useState(false)
   const [err, setErr] = useState<string | null>(null)
   const [queuedMsg, setQueuedMsg] = useState<string | null>(null)
   const [isPending, startTransition] = useTransition()
 
+  const [replies, setReplies] = useState<CannedReplyDTO[]>([])
+  const [repliesLoaded, setRepliesLoaded] = useState(false)
+  const [repliesLoading, setRepliesLoading] = useState(false)
+  const [trigger, setTrigger] = useState<TriggerInfo | null>(null)
+  const [highlightIndex, setHighlightIndex] = useState(0)
+
+  const filtered = useMemo(() => {
+    if (!trigger) return []
+    const q = trigger.query.toLowerCase()
+    if (!q) return replies.slice(0, 6)
+    return replies
+      .filter(
+        (r) =>
+          r.key.toLowerCase().includes(q) ||
+          r.title.toLowerCase().includes(q),
+      )
+      .slice(0, 6)
+  }, [trigger, replies])
+
+  useEffect(() => {
+    setHighlightIndex(0)
+  }, [trigger?.query])
+
   const voice = useVoiceInput((chunk) => {
     setBody((prev) => (prev ? `${prev} ${chunk}` : chunk))
   })
+
+  async function ensureRepliesLoaded() {
+    if (repliesLoaded || repliesLoading) return
+    setRepliesLoading(true)
+    try {
+      const list = await listCannedReplies()
+      setReplies(list)
+    } catch {
+      // Silent — picker still works once user has none.
+    } finally {
+      setRepliesLoaded(true)
+      setRepliesLoading(false)
+    }
+  }
+
+  function refreshTrigger(text: string, caret: number) {
+    const t = detectTrigger(text, caret)
+    setTrigger(t)
+    if (t) ensureRepliesLoaded()
+  }
+
+  function handleChange(e: React.ChangeEvent<HTMLTextAreaElement>) {
+    const v = e.target.value
+    setBody(v)
+    const caret = e.target.selectionStart ?? v.length
+    refreshTrigger(v, caret)
+  }
+
+  function handleSelect(e: React.SyntheticEvent<HTMLTextAreaElement>) {
+    const ta = e.currentTarget
+    const caret = ta.selectionStart ?? ta.value.length
+    refreshTrigger(ta.value, caret)
+  }
+
+  function insertReply(reply: CannedReplyDTO) {
+    if (!trigger) return
+    const before = body.slice(0, trigger.start)
+    const after = body.slice(trigger.end)
+    const next = before + reply.body + after
+    setBody(next)
+    setTrigger(null)
+    incrementCannedReplyUse(reply.id).catch(() => {})
+    const caretPos = before.length + reply.body.length
+    requestAnimationFrame(() => {
+      const ta = textareaRef.current
+      if (ta) {
+        ta.focus()
+        ta.setSelectionRange(caretPos, caretPos)
+      }
+    })
+  }
+
+  function handleKeyDown(e: React.KeyboardEvent<HTMLTextAreaElement>) {
+    if (!trigger) {
+      if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') {
+        e.preventDefault()
+        submit()
+      }
+      return
+    }
+    if (e.key === 'Escape') {
+      e.preventDefault()
+      setTrigger(null)
+      return
+    }
+    if (e.key === 'ArrowDown') {
+      e.preventDefault()
+      setHighlightIndex((i) => (filtered.length === 0 ? 0 : Math.min(filtered.length - 1, i + 1)))
+      return
+    }
+    if (e.key === 'ArrowUp') {
+      e.preventDefault()
+      setHighlightIndex((i) => Math.max(0, i - 1))
+      return
+    }
+    if (e.key === 'Enter' || e.key === 'Tab') {
+      if (filtered.length > 0) {
+        e.preventDefault()
+        insertReply(filtered[highlightIndex])
+      } else {
+        setTrigger(null)
+      }
+    }
+  }
 
   function submit() {
     if (!body.trim()) return
@@ -34,6 +163,7 @@ export function CommentComposer({ ticketId }: { ticketId: string }) {
           body: { body: pending, isInternal: pendingInternal },
         })
         setBody('')
+        setTrigger(null)
         if (res.synced) {
           router.refresh()
         } else {
@@ -77,6 +207,12 @@ export function CommentComposer({ ticketId }: { ticketId: string }) {
         >
           Internal Note
         </button>
+        <span
+          className="hidden font-mono text-[10px] uppercase tracking-wider text-th-text-muted md:inline"
+          title="Type / at the start of a line to insert a saved reply"
+        >
+          / for saved
+        </span>
         <div className="ml-auto">
           {voice.supported && (
             <button
@@ -95,8 +231,13 @@ export function CommentComposer({ ticketId }: { ticketId: string }) {
         </div>
       </div>
       <textarea
+        ref={textareaRef}
         value={body}
-        onChange={(e) => setBody(e.target.value)}
+        onChange={handleChange}
+        onKeyDown={handleKeyDown}
+        onKeyUp={handleSelect}
+        onClick={handleSelect}
+        onFocus={() => ensureRepliesLoaded()}
         rows={4}
         className={
           isInternal
@@ -109,6 +250,15 @@ export function CommentComposer({ ticketId }: { ticketId: string }) {
             : 'Reply — visible to the client…'
         }
       />
+      {trigger && (
+        <CannedReplyPicker
+          replies={filtered}
+          highlightIndex={highlightIndex}
+          onSelect={insertReply}
+          onHover={setHighlightIndex}
+          loading={repliesLoading && filtered.length === 0}
+        />
+      )}
       {err && (
         <div className="mt-2 rounded-md border border-priority-urgent/40 bg-priority-urgent/10 px-3 py-1.5 text-xs text-priority-urgent">
           {err}

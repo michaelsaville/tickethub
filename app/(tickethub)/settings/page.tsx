@@ -39,6 +39,11 @@ const GROUPS = [
         description: 'Reusable SOP checklists for tickets',
       },
       {
+        href: '/settings/canned-replies',
+        title: 'Canned Replies',
+        description: 'Saved comment text — type /key in the composer to insert',
+      },
+      {
         href: '/settings/invoice-template',
         title: 'Invoice Template',
         description: 'Customize invoice PDF layout, colors, and logo',
