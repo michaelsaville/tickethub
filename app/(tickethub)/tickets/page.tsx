@@ -7,6 +7,7 @@ import { SlaBadge } from '@/app/components/SlaBadge'
 import { SwipeTicketRow } from './SwipeTicketRow'
 import { AiSearch } from './AiSearch'
 import { TicketListClient } from './TicketListClient'
+import { BulkTicketTable } from './BulkTicketTable'
 import { getTicketViews } from '@/app/lib/actions/ticket-views'
 import type { ViewFilters, ViewSort } from '@/app/lib/actions/ticket-views'
 
@@ -169,88 +170,9 @@ export default async function TicketsPage({
           ))}
         </ul>
 
-        {/* Desktop: dense table */}
-        <div className="mt-6 hidden overflow-hidden rounded-lg border border-th-border md:block">
-          <table className="w-full text-sm">
-            <thead className="bg-th-elevated text-left font-mono text-[10px] uppercase tracking-wider text-th-text-muted">
-              <tr>
-                <th className="w-1 p-0" aria-hidden />
-                <th className="px-3 py-2 w-16">#</th>
-                <th className="px-3 py-2">Title</th>
-                <th className="px-3 py-2 w-44">Client</th>
-                <th className="px-3 py-2 w-32">Assignee</th>
-                <th className="px-3 py-2 w-20">SLA</th>
-                <th className="px-3 py-2 w-28">Status</th>
-                <th className="px-3 py-2 w-20 text-right">Updated</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-th-border bg-th-surface">
-              {tickets.map((t) => {
-                return (
-                  <tr
-                    key={t.id}
-                    className="group transition-colors hover:bg-th-elevated"
-                  >
-                    <td
-                      className={`w-1 p-0 ${priorityBorderClass(t.priority)}`}
-                      aria-hidden
-                    />
-                    <td className="px-3 py-2 font-mono text-xs text-th-text-muted">
-                      #{t.ticketNumber}
-                    </td>
-                    <td className="px-3 py-2">
-                      <Link
-                        href={`/tickets/${t.id}`}
-                        className={
-                          t.isUnread
-                            ? 'font-semibold text-slate-100 hover:text-accent'
-                            : 'text-slate-300 hover:text-accent'
-                        }
-                      >
-                        {t.isUnread && (
-                          <span
-                            aria-label="unread"
-                            className="mr-2 text-accent"
-                          >
-                            ✉
-                          </span>
-                        )}
-                        {t.title}
-                      </Link>
-                    </td>
-                    <td className="truncate px-3 py-2 text-th-text-secondary">
-                      <Link
-                        href={`/clients/${t.client.id}`}
-                        className="hover:text-accent"
-                      >
-                        {t.client.shortCode ?? t.client.name}
-                      </Link>
-                    </td>
-                    <td className="px-3 py-2 text-th-text-secondary">
-                      {t.assignedTo ? (
-                        <span title={t.assignedTo.email}>
-                          {t.assignedTo.name}
-                        </span>
-                      ) : (
-                        <span className="text-th-text-muted">Unassigned</span>
-                      )}
-                    </td>
-                    <td className="px-3 py-2">
-                      <SlaBadge ticket={t} />
-                    </td>
-                    <td className="px-3 py-2">
-                      <span className={statusBadgeClass(t.status)}>
-                        {t.status.replace(/_/g, ' ')}
-                      </span>
-                    </td>
-                    <td className="px-3 py-2 text-right font-mono text-[10px] text-th-text-muted">
-                      {formatRelative(t.updatedAt, new Date())}
-                    </td>
-                  </tr>
-                )
-              })}
-            </tbody>
-          </table>
+        {/* Desktop: dense table with bulk selection (hidden below md inside the component) */}
+        <div className="mt-6 hidden md:block pb-20">
+          <BulkTicketTable tickets={tickets} techs={users} />
         </div>
         </>
       )}
