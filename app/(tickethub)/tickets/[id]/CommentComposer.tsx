@@ -46,7 +46,26 @@ export function CommentComposer({ ticketId }: { ticketId: string }) {
   const router = useRouter()
   const textareaRef = useRef<HTMLTextAreaElement>(null)
   const [body, setBody] = useState('')
-  const [isInternal, setIsInternal] = useState(false)
+  const [isInternal, setIsInternalState] = useState(false)
+  // Restore last-used reply mode from localStorage so techs who default
+  // to internal notes don't have to re-toggle on every ticket.
+  useEffect(() => {
+    try {
+      if (localStorage.getItem('th:commentMode') === 'internal') {
+        setIsInternalState(true)
+      }
+    } catch {
+      // Private browsing — silent.
+    }
+  }, [])
+  function setIsInternal(next: boolean) {
+    setIsInternalState(next)
+    try {
+      localStorage.setItem('th:commentMode', next ? 'internal' : 'public')
+    } catch {
+      // Silent.
+    }
+  }
   const [err, setErr] = useState<string | null>(null)
   const [queuedMsg, setQueuedMsg] = useState<string | null>(null)
   const [isPending, startTransition] = useTransition()

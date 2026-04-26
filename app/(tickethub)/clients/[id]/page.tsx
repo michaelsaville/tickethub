@@ -49,6 +49,16 @@ export default async function ClientDetailPage({
     where: { status: 'BILLABLE', contract: { clientId: client.id } },
   })
 
+  // Cross-app deep-link: DocHub stores a Client row keyed by name. Match by
+  // name (case-insensitive) so the header can offer one-click jump-out.
+  // Returns null when no match exists, in which case the link is hidden.
+  const dochubMatch = await prisma.$queryRaw<{ id: string }[]>`
+    SELECT id FROM public."Client" WHERE lower(name) = lower(${client.name}) LIMIT 1
+  `
+  const dochubClientId = dochubMatch[0]?.id ?? null
+  const DOCHUB_BASE =
+    process.env.NEXT_PUBLIC_DOCHUB_URL || 'https://dochub.pcc2k.com'
+
   return (
     <div className="p-6">
       <header className="mb-6">
@@ -70,14 +80,27 @@ export default async function ClientDetailPage({
               <span className="text-xs text-th-text-muted">(inactive)</span>
             )}
           </div>
-          {client.isActive && (
-            <Link
-              href={`/tickets/new?clientId=${client.id}`}
-              className="th-btn-primary text-sm"
-            >
-              + New ticket
-            </Link>
-          )}
+          <div className="flex flex-wrap items-center gap-2">
+            {dochubClientId && (
+              <a
+                href={`${DOCHUB_BASE}/clients/${dochubClientId}`}
+                target="_blank"
+                rel="noreferrer"
+                className="th-btn-secondary text-sm"
+                title="Open this client in DocHub (assets, credentials, runbooks)"
+              >
+                📁 DocHub ↗
+              </a>
+            )}
+            {client.isActive && (
+              <Link
+                href={`/tickets/new?clientId=${client.id}`}
+                className="th-btn-primary text-sm"
+              >
+                + New ticket
+              </Link>
+            )}
+          </div>
         </div>
       </header>
 
