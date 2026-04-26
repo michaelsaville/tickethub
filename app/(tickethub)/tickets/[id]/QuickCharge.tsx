@@ -12,9 +12,15 @@ type Item = Pick<TH_Item, 'id' | 'name' | 'type' | 'code'>
 export function QuickCharge({
   ticketId,
   items,
+  activeTimer,
 }: {
   ticketId: string
   items: Item[]
+  activeTimer?: {
+    startedAtMs: number
+    pausedAtMs: number | null
+    pausedMs: number
+  } | null
 }) {
   const [showAll, setShowAll] = useState(false)
   const visibleItems = useMemo(
@@ -80,6 +86,20 @@ export function QuickCharge({
     setChargedMinutes(rounded)
   }
 
+  function elapsedTimerMinutes(): number | null {
+    if (!activeTimer) return null
+    const refMs = activeTimer.pausedAtMs ?? Date.now()
+    const elapsedMs = refMs - activeTimer.startedAtMs - activeTimer.pausedMs
+    if (elapsedMs <= 0) return null
+    return Math.max(1, Math.round(elapsedMs / 60_000))
+  }
+
+  function useTimerValue() {
+    const m = elapsedTimerMinutes()
+    if (m == null) return
+    setMinutes(m)
+  }
+
   if (items.length === 0) {
     return (
       <div className="th-card">
@@ -136,6 +156,19 @@ export function QuickCharge({
 
         {isLabor ? (
           <div className="flex items-center gap-1">
+            {(() => {
+              const tm = elapsedTimerMinutes()
+              return tm != null ? (
+                <button
+                  type="button"
+                  onClick={useTimerValue}
+                  className="rounded-md border border-accent/60 bg-accent/15 px-3 py-1.5 text-xs font-mono text-accent hover:bg-accent/25"
+                  title="Fill from your active timer"
+                >
+                  ⏱ {tm}m
+                </button>
+              ) : null
+            })()}
             {LABOR_QUICK_PICKS.map((m) => (
               <button
                 key={m}

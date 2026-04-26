@@ -426,7 +426,21 @@ export default async function TicketDetailPage({
           />
 
           <div id="log-time">
-            <QuickCharge ticketId={ticket.id} items={items} />
+            <QuickCharge
+              ticketId={ticket.id}
+              items={items}
+              activeTimer={
+                myTimer && myTimer.ticketId === ticket.id
+                  ? {
+                      startedAtMs: myTimer.startedAt.getTime(),
+                      pausedAtMs: myTimer.pausedAt
+                        ? myTimer.pausedAt.getTime()
+                        : null,
+                      pausedMs: myTimer.pausedMs,
+                    }
+                  : null
+              }
+            />
           </div>
 
           <ReceiptScanner ticketId={ticket.id} items={items} />
