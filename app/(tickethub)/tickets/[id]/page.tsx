@@ -25,6 +25,7 @@ import { ConvertToKbButton } from './ConvertToKbButton'
 import { DochubAssetPicker } from './DochubAssetPicker'
 import { AppointmentsCard } from './AppointmentsCard'
 import { CustomFieldsCard } from '@/app/components/CustomFieldsCard'
+import { TimelineFilter } from './TimelineFilter'
 import type { ChecklistItem } from '@/app/lib/actions/checklist'
 import { getMyTimer } from '@/app/lib/actions/timer'
 import { getAppointmentsForTicket } from '@/app/lib/actions/appointments'
@@ -170,19 +171,22 @@ export default async function TicketDetailPage({
       isAutomationEnabled('onsite_workflow.enabled'),
     ])
 
-  type TimelineEntry =
-    | { kind: 'comment'; at: Date; data: (typeof ticket.comments)[number] }
-    | { kind: 'event'; at: Date; data: (typeof ticket.timeline)[number] }
-  const merged: TimelineEntry[] = [
-    ...ticket.comments.map<TimelineEntry>((c) => ({
-      kind: 'comment',
-      at: c.createdAt,
-      data: c,
-    })),
-    ...ticket.timeline
-      .filter((e) => e.type !== 'COMMENT' && e.type !== 'INTERNAL_NOTE')
-      .map<TimelineEntry>((e) => ({ kind: 'event', at: e.createdAt, data: e })),
-  ].sort((a, b) => a.at.getTime() - b.at.getTime())
+  const timelineComments = ticket.comments.map((c) => ({
+    id: c.id,
+    body: c.body,
+    isInternal: c.isInternal,
+    createdAt: c.createdAt.toISOString(),
+    author: { name: c.author.name },
+  }))
+  const timelineEvents = ticket.timeline
+    .filter((e) => e.type !== 'COMMENT' && e.type !== 'INTERNAL_NOTE')
+    .map((e) => ({
+      id: e.id,
+      type: e.type,
+      data: e.data,
+      createdAt: e.createdAt.toISOString(),
+      user: e.user ? { name: e.user.name } : null,
+    }))
 
   return (
     <div className="p-6">
@@ -385,26 +389,10 @@ export default async function TicketDetailPage({
             <div className="mb-3 font-mono text-[10px] uppercase tracking-wider text-th-text-muted">
               Timeline
             </div>
-            {merged.length === 0 ? (
-              <p className="text-xs text-th-text-muted">
-                No activity yet. Add the first comment below.
-              </p>
-            ) : (
-              <ol className="space-y-3">
-                {merged.map((entry, i) => (
-                  <li key={i} className="flex gap-3">
-                    <div className="mt-1 h-2 w-2 flex-none rounded-full bg-accent/60" />
-                    <div className="flex-1 text-sm">
-                      {entry.kind === 'comment' ? (
-                        <CommentRow comment={entry.data} />
-                      ) : (
-                        <EventRow event={entry.data} />
-                      )}
-                    </div>
-                  </li>
-                ))}
-              </ol>
-            )}
+            <TimelineFilter
+              comments={timelineComments}
+              events={timelineEvents}
+            />
             <PendingCommentList ticketId={ticket.id} />
           </div>
 
@@ -538,80 +526,3 @@ export default async function TicketDetailPage({
   )
 }
 
-function CommentRow({
-  comment,
-}: {
-  comment: {
-    body: string
-    isInternal: boolean
-    createdAt: Date
-    author: { name: string }
-  }
-}) {
-  return (
-    <div
-      className={
-        comment.isInternal
-          ? 'rounded-md border border-accent/30 bg-accent/5 p-3'
-          : 'rounded-md border border-th-border bg-th-base p-3'
-      }
-    >
-      <div className="flex items-baseline gap-2 text-xs">
-        <span className="font-medium text-slate-200">{comment.author.name}</span>
-        {comment.isInternal && (
-          <span className="font-mono text-[10px] uppercase tracking-wider text-accent">
-            Internal
-          </span>
-        )}
-        <span className="ml-auto text-th-text-muted">
-          {comment.createdAt.toLocaleString()}
-        </span>
-      </div>
-      <div className="mt-1 whitespace-pre-wrap text-sm text-slate-100">
-        {comment.body}
-      </div>
-    </div>
-  )
-}
-
-function EventRow({
-  event,
-}: {
-  event: {
-    type: string
-    data: unknown
-    createdAt: Date
-    user: { name: string } | null
-  }
-}) {
-  const data = (event.data ?? {}) as Record<string, unknown>
-  let label = event.type
-  if (event.type === 'STATUS_CHANGE') {
-    label = `Status: ${String(data.from)} → ${String(data.to)}`
-  } else if (event.type === 'PRIORITY_CHANGE') {
-    label = `Priority: ${String(data.from)} → ${String(data.to)}`
-  } else if (event.type === 'ASSIGNED') {
-    label = data.to ? `Assigned` : `Unassigned`
-  } else if (event.type === 'CREATED') {
-    label = 'Ticket created'
-  } else if (event.type === 'TITLE_CHANGE') {
-    label = `Title changed`
-  } else if (event.type === 'MENTION') {
-    label = `Mentioned a teammate`
-  } else if (event.type === 'MERGE_INTO') {
-    const num = data.fromTicketNumber
-    label = num != null ? `Merged in #${String(num)}` : 'Merged in another ticket'
-  } else if (event.type === 'MERGED_AWAY') {
-    const num = data.toTicketNumber
-    label = num != null ? `Merged into #${String(num)}` : 'Merged into another ticket'
-  }
-  return (
-    <div className="text-xs text-th-text-secondary">
-      <span className="text-slate-300">{event.user?.name ?? 'System'}</span>{' '}
-      <span>· {label}</span>
-      <span className="ml-2 text-th-text-muted">
-        {event.createdAt.toLocaleString()}
-      </span>
-    </div>
-  )
-}
