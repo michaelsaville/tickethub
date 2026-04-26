@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import {
   blockSender,
+  bulkDismissPending,
   createTicketFromPending,
   dismissPending,
 } from '@/app/lib/actions/inbox'
@@ -34,6 +35,53 @@ interface Props {
 
 export function InboxList({ rows, clients, techs, currentUserId }: Props) {
   const [openRow, setOpenRow] = useState<InboxRow | null>(null)
+  const [selected, setSelected] = useState<Set<string>>(new Set())
+  const [bulkErr, setBulkErr] = useState<string | null>(null)
+  const [bulkPending, startBulk] = useTransition()
+  const router = useRouter()
+
+  const pendingRows = rows.filter((r) => r.status === 'PENDING')
+  const selectablePendingIds = new Set(pendingRows.map((r) => r.id))
+  const selectedPendingCount = [...selected].filter((id) =>
+    selectablePendingIds.has(id),
+  ).length
+
+  function toggle(id: string) {
+    setSelected((prev) => {
+      const next = new Set(prev)
+      if (next.has(id)) next.delete(id)
+      else next.add(id)
+      return next
+    })
+  }
+
+  function selectAllPending() {
+    setSelected(new Set(pendingRows.map((r) => r.id)))
+  }
+
+  function clearSelection() {
+    setSelected(new Set())
+  }
+
+  function bulkDismiss() {
+    const ids = [...selected].filter((id) => selectablePendingIds.has(id))
+    if (ids.length === 0) return
+    if (
+      !confirm(
+        `Dismiss ${ids.length} email${ids.length === 1 ? '' : 's'}? You can't undo this.`,
+      )
+    )
+      return
+    setBulkErr(null)
+    startBulk(async () => {
+      const res = await bulkDismissPending(ids)
+      if (!res.ok) setBulkErr(res.error ?? 'Failed')
+      else {
+        clearSelection()
+        router.refresh()
+      }
+    })
+  }
 
   if (rows.length === 0) {
     return (
@@ -45,9 +93,49 @@ export function InboxList({ rows, clients, techs, currentUserId }: Props) {
 
   return (
     <>
+      {selectedPendingCount > 0 && (
+        <div className="sticky top-0 z-10 mb-3 flex flex-wrap items-center gap-3 rounded-md border border-accent/40 bg-th-elevated px-3 py-2 shadow">
+          <span className="text-sm text-slate-200">
+            {selectedPendingCount} selected
+          </span>
+          <button
+            type="button"
+            onClick={bulkDismiss}
+            disabled={bulkPending}
+            className="th-btn-primary text-xs"
+          >
+            {bulkPending ? 'Dismissing…' : `Dismiss ${selectedPendingCount}`}
+          </button>
+          <button
+            type="button"
+            onClick={selectAllPending}
+            className="th-btn-ghost text-xs"
+          >
+            Select all pending ({pendingRows.length})
+          </button>
+          <button
+            type="button"
+            onClick={clearSelection}
+            className="th-btn-ghost text-xs"
+          >
+            Clear
+          </button>
+          {bulkErr && (
+            <span className="text-xs text-priority-urgent">{bulkErr}</span>
+          )}
+        </div>
+      )}
       <div className="space-y-2">
         {rows.map((row) => (
-          <InboxRowCard key={row.id} row={row} onCreate={() => setOpenRow(row)} />
+          <InboxRowCard
+            key={row.id}
+            row={row}
+            onCreate={() => setOpenRow(row)}
+            selected={selected.has(row.id)}
+            onSelectToggle={
+              row.status === 'PENDING' ? () => toggle(row.id) : null
+            }
+          />
         ))}
       </div>
       {openRow && (
@@ -66,9 +154,13 @@ export function InboxList({ rows, clients, techs, currentUserId }: Props) {
 function InboxRowCard({
   row,
   onCreate,
+  selected,
+  onSelectToggle,
 }: {
   row: InboxRow
   onCreate: () => void
+  selected: boolean
+  onSelectToggle: (() => void) | null
 }) {
   const router = useRouter()
   const [isPending, startTransition] = useTransition()
@@ -106,8 +198,21 @@ function InboxRowCard({
     : null
 
   return (
-    <div className="th-card">
+    <div
+      className={
+        selected ? 'th-card border-accent/60 bg-accent/5' : 'th-card'
+      }
+    >
       <div className="flex items-start justify-between gap-4">
+        {onSelectToggle && (
+          <input
+            type="checkbox"
+            checked={selected}
+            onChange={onSelectToggle}
+            aria-label="Select email"
+            className="mt-1.5 h-4 w-4 rounded border-th-border bg-th-base text-accent focus:ring-accent"
+          />
+        )}
         <div className="min-w-0 flex-1">
           <div className="mb-1 flex flex-wrap items-center gap-2">
             {mailboxLabel && (

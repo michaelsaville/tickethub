@@ -119,6 +119,39 @@ export async function dismissPending(
   }
 }
 
+/**
+ * Dismiss many pending emails in one transaction. Caller should already
+ * have filtered to PENDING-status rows; we re-filter on `status: PENDING`
+ * defensively so we don't trample APPROVED rows that raced into being.
+ */
+export async function bulkDismissPending(
+  ids: string[],
+): Promise<{ ok: boolean; dismissed?: number; error?: string }> {
+  const userId = await getUserId()
+  if (!userId) return { ok: false, error: 'Unauthorized' }
+  if (!Array.isArray(ids) || ids.length === 0) {
+    return { ok: false, error: 'No emails selected' }
+  }
+  if (ids.length > 500) {
+    return { ok: false, error: 'Too many selected (max 500 per batch)' }
+  }
+  try {
+    const res = await prisma.tH_PendingInboundEmail.updateMany({
+      where: { id: { in: ids }, status: 'PENDING' },
+      data: {
+        status: 'DISMISSED',
+        handledById: userId,
+        handledAt: new Date(),
+      },
+    })
+    revalidatePath('/inbox')
+    return { ok: true, dismissed: res.count }
+  } catch (e) {
+    console.error('[actions/inbox] bulkDismissPending failed', e)
+    return { ok: false, error: 'Failed to bulk dismiss' }
+  }
+}
+
 export async function blockSender(
   pendingId: string,
   scope: 'EMAIL' | 'DOMAIN',
