@@ -141,6 +141,13 @@ export function DispatchBoard({
   const weekStart = useMemo(() => new Date(weekStartStr), [weekStartStr])
   const [dragTicket, setDragTicket] = useState<Ticket | null>(null)
   const [dragOverSlot, setDragOverSlot] = useState<{ dayIdx: number; techId: string; slot: number } | null>(null)
+  const [conflictWarnings, setConflictWarnings] = useState<string[] | null>(null)
+  // Auto-dismiss the conflict toast after a generous read window.
+  useEffect(() => {
+    if (!conflictWarnings) return
+    const t = setTimeout(() => setConflictWarnings(null), 8000)
+    return () => clearTimeout(t)
+  }, [conflictWarnings])
   const gridRef = useRef<HTMLDivElement>(null)
   const ticketsById = useMemo(() => {
     const m = new Map<string, Ticket>()
@@ -221,11 +228,14 @@ export function DispatchBoard({
       const durationMs = new Date(orig.scheduledEnd).getTime() - new Date(orig.scheduledStart).getTime()
       const end = new Date(start.getTime() + durationMs)
 
-      await moveAppointment(movedApptId, {
+      const moveRes = await moveAppointment(movedApptId, {
         technicianId: techId,
         scheduledStart: start.toISOString(),
         scheduledEnd: end.toISOString(),
       })
+      if (moveRes.ok && moveRes.warnings?.length) {
+        setConflictWarnings(moveRes.warnings)
+      }
       router.refresh()
       return
     }
@@ -239,12 +249,15 @@ export function DispatchBoard({
     const durationMin = ticket.estimatedMinutes ?? 60
     const end = new Date(start.getTime() + durationMin * 60_000)
 
-    await createAppointment({
+    const createRes = await createAppointment({
       ticketId: ticket.id,
       technicianId: techId,
       scheduledStart: start.toISOString(),
       scheduledEnd: end.toISOString(),
     })
+    if (createRes.ok && createRes.warnings?.length) {
+      setConflictWarnings(createRes.warnings)
+    }
 
     setDragTicket(null)
     router.refresh()
@@ -253,7 +266,10 @@ export function DispatchBoard({
   // ─── Resize handler ─────────────────────────────────────────────────
 
   async function handleResize(appointmentId: string, newEndIso: string) {
-    await resizeAppointment(appointmentId, newEndIso)
+    const res = await resizeAppointment(appointmentId, newEndIso)
+    if (res.ok && res.warnings?.length) {
+      setConflictWarnings(res.warnings)
+    }
     router.refresh()
   }
 
@@ -276,6 +292,34 @@ export function DispatchBoard({
 
   return (
     <div className="flex h-[calc(100vh-3.5rem)] overflow-hidden">
+      {conflictWarnings && conflictWarnings.length > 0 && (
+        <div
+          className="pointer-events-auto fixed left-1/2 top-4 z-50 max-w-md -translate-x-1/2 rounded-md border border-amber-500/40 bg-amber-500/10 px-4 py-2 text-amber-200 shadow-lg"
+          role="status"
+        >
+          <div className="flex items-start gap-2">
+            <span aria-hidden>⚠️</span>
+            <div className="text-xs">
+              <div className="font-semibold uppercase tracking-wider">
+                Scheduling conflict
+              </div>
+              <ul className="mt-1 space-y-0.5">
+                {conflictWarnings.map((w, i) => (
+                  <li key={i}>{w}</li>
+                ))}
+              </ul>
+              <button
+                type="button"
+                onClick={() => setConflictWarnings(null)}
+                className="mt-1 text-[11px] underline opacity-80 hover:opacity-100"
+              >
+                Dismiss
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Left panel: unscheduled tickets */}
       <UnscheduledQueue
         tickets={unscheduledTickets}

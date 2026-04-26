@@ -13,7 +13,49 @@ import { updateTicketStatusCore } from '@/app/lib/tickets-core'
 import { emit } from '@/app/lib/automation/bus'
 import { EVENT_TYPES } from '@/app/lib/automation/events'
 
-export type AppointmentResult = { ok: true; id?: string } | { ok: false; error: string }
+export type AppointmentResult =
+  | { ok: true; id?: string; warnings?: string[] }
+  | { ok: false; error: string }
+
+/**
+ * Find existing appointments for the same tech that overlap a given time
+ * window. Used to warn (not block) when a new booking would create a
+ * conflict — sometimes overlaps are intentional, but the dispatcher
+ * should always be told.
+ */
+async function findAppointmentConflicts(
+  technicianId: string,
+  start: Date,
+  end: Date,
+  excludeId?: string,
+): Promise<string[]> {
+  const overlaps = await prisma.tH_Appointment.findMany({
+    where: {
+      technicianId,
+      status: { notIn: ['COMPLETE', 'CANCELLED'] },
+      scheduledStart: { lt: end },
+      scheduledEnd: { gt: start },
+      ...(excludeId ? { id: { not: excludeId } } : {}),
+    },
+    select: {
+      id: true,
+      scheduledStart: true,
+      scheduledEnd: true,
+      ticket: { select: { ticketNumber: true, title: true } },
+    },
+    orderBy: { scheduledStart: 'asc' },
+    take: 5,
+  })
+  return overlaps.map((o) => {
+    const t = o.scheduledStart.toLocaleTimeString('en-US', {
+      hour: 'numeric',
+      minute: '2-digit',
+    })
+    const tn = o.ticket?.ticketNumber
+    const title = o.ticket?.title
+    return `Overlaps #${tn ?? '?'} (${t})${title ? ` — ${title}` : ''}`
+  })
+}
 
 async function getUserId(): Promise<string | null> {
   const session = await getServerSession(authOptions)
@@ -176,9 +218,20 @@ export async function createAppointment(input: {
     }).catch(() => {})
   }
 
+  const warnings = await findAppointmentConflicts(
+    input.technicianId,
+    start,
+    end,
+    appt.id,
+  )
+
   revalidatePath('/schedule')
   revalidatePath(`/tickets/${input.ticketId}`)
-  return { ok: true, id: appt.id }
+  return {
+    ok: true,
+    id: appt.id,
+    ...(warnings.length > 0 ? { warnings } : {}),
+  }
 }
 
 /** Move appointment to a different time/tech (drag on grid). */
@@ -195,7 +248,7 @@ export async function moveAppointment(
 
   const appt = await prisma.tH_Appointment.findUnique({
     where: { id: appointmentId },
-    select: { id: true, status: true },
+    select: { id: true, status: true, technicianId: true },
   })
   if (!appt) return { ok: false, error: 'Appointment not found' }
   if (appt.status === 'COMPLETE' || appt.status === 'CANCELLED') {
@@ -215,8 +268,18 @@ export async function moveAppointment(
     },
   })
 
+  const warnings = await findAppointmentConflicts(
+    input.technicianId ?? appt.technicianId,
+    start,
+    end,
+    appointmentId,
+  )
+
   revalidatePath('/schedule')
-  return { ok: true }
+  return {
+    ok: true,
+    ...(warnings.length > 0 ? { warnings } : {}),
+  }
 }
 
 /** Resize appointment (drag bottom edge). */
@@ -229,7 +292,7 @@ export async function resizeAppointment(
 
   const appt = await prisma.tH_Appointment.findUnique({
     where: { id: appointmentId },
-    select: { id: true, status: true, scheduledStart: true },
+    select: { id: true, status: true, scheduledStart: true, technicianId: true },
   })
   if (!appt) return { ok: false, error: 'Appointment not found' }
   if (appt.status === 'COMPLETE' || appt.status === 'CANCELLED') {
@@ -244,8 +307,18 @@ export async function resizeAppointment(
     data: { scheduledEnd: end },
   })
 
+  const warnings = await findAppointmentConflicts(
+    appt.technicianId,
+    appt.scheduledStart,
+    end,
+    appointmentId,
+  )
+
   revalidatePath('/schedule')
-  return { ok: true }
+  return {
+    ok: true,
+    ...(warnings.length > 0 ? { warnings } : {}),
+  }
 }
 
 /** Transition appointment status. */
