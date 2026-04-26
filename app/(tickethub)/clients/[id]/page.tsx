@@ -4,6 +4,7 @@ import { prisma } from '@/app/lib/prisma'
 import { requireAuth, hasMinRole } from '@/app/lib/api-auth'
 import { BillingSettings } from './TaxStateSelector'
 import { startPortalImpersonationAction } from '@/app/lib/actions/portal-impersonate'
+import { CustomFieldsCard } from '@/app/components/CustomFieldsCard'
 
 export const dynamic = 'force-dynamic'
 
@@ -168,6 +169,7 @@ export default async function ClientDetailPage({
         </section>
 
         <aside className="space-y-6">
+          <CustomFieldsCard entity="CLIENT" entityId={client.id} />
           <section>
             <SectionHeader
               title="Contacts"

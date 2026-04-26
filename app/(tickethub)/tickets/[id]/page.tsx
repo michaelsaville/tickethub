@@ -24,6 +24,7 @@ import { TagsInput } from './TagsInput'
 import { ConvertToKbButton } from './ConvertToKbButton'
 import { DochubAssetPicker } from './DochubAssetPicker'
 import { AppointmentsCard } from './AppointmentsCard'
+import { CustomFieldsCard } from '@/app/components/CustomFieldsCard'
 import type { ChecklistItem } from '@/app/lib/actions/checklist'
 import { getMyTimer } from '@/app/lib/actions/timer'
 import { getAppointmentsForTicket } from '@/app/lib/actions/appointments'
@@ -310,6 +311,7 @@ export default async function TicketDetailPage({
               }))}
             />
           </div>
+          <CustomFieldsCard entity="TICKET" entityId={ticket.id} />
           <dl className="th-card mt-4 space-y-3 text-xs">
             {ticket.site && (
               <div>

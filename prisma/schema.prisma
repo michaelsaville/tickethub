@@ -1034,6 +1034,86 @@ model TH_CannedReply {
   @@schema("tickethub")
 }
 
+// ─── CUSTOM FIELDS ────────────────────────────────────────────────────────
+
+enum TH_CustomFieldEntity {
+  TICKET
+  CLIENT
+
+  @@schema("tickethub")
+}
+
+enum TH_CustomFieldType {
+  TEXT
+  MULTILINE
+  NUMBER
+  DATE
+  BOOLEAN
+  SELECT
+  URL
+
+  @@schema("tickethub")
+}
+
+model TH_CustomFieldDef {
+  id String @id @default(cuid())
+  /// Stable machine-readable key (e.g. "warranty_expires"). Lowercase,
+  /// alphanumeric + underscore. Unique per entity — used in event
+  /// payloads, search filters, and as a stable identifier across renames.
+  key        String
+  /// Human-readable label shown in the UI ("Warranty expires").
+  label      String
+  entity     TH_CustomFieldEntity
+  type       TH_CustomFieldType
+  /// Optional helper text shown below the field in the editor.
+  helpText   String?
+  /// JSON array of `{value, label}` pairs for SELECT fields. Ignored for
+  /// other types. Validated at def-write time.
+  options    Json?
+  required   Boolean              @default(false)
+  /// Lower numbers render first. Defaults to 0; admins reorder via the
+  /// settings UI.
+  sortOrder  Int                  @default(0)
+  /// Soft delete — archived defs disappear from edit forms but their
+  /// historical values are preserved on entities.
+  archivedAt DateTime?
+  createdAt  DateTime             @default(now())
+  updatedAt  DateTime             @updatedAt
+
+  values TH_CustomFieldValue[]
+
+  @@unique([entity, key])
+  @@index([entity, archivedAt, sortOrder])
+  @@map("th_custom_field_defs")
+  @@schema("tickethub")
+}
+
+model TH_CustomFieldValue {
+  id    String            @id @default(cuid())
+  defId String
+  def   TH_CustomFieldDef @relation(fields: [defId], references: [id], onDelete: Cascade)
+  /// Polymorphic owner. `entityType` must match `def.entity`; `entityId`
+  /// is the row id on TH_Ticket / TH_Client. Not a foreign key — polymorphism
+  /// without per-entity join tables.
+  entityType TH_CustomFieldEntity
+  entityId   String
+  /// All values stored as strings; parse at the call site by `def.type`:
+  ///   NUMBER  → parseFloat
+  ///   DATE    → ISO date string
+  ///   BOOLEAN → 'true' | 'false'
+  ///   SELECT  → must be one of def.options[].value
+  ///   others  → raw text
+  /// A row only exists when the user has set a non-empty value.
+  value String
+
+  updatedAt DateTime @updatedAt
+
+  @@unique([defId, entityType, entityId])
+  @@index([entityType, entityId])
+  @@map("th_custom_field_values")
+  @@schema("tickethub")
+}
+
 // ─── TAX RATES ────────────────────────────────────────────────────────────
 
 model TH_TaxRate {

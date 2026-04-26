@@ -33,6 +33,11 @@ const GROUPS = [
         title: 'Vendors',
         description: 'Catalog of suppliers used on POs and parts',
       },
+      {
+        href: '/settings/custom-fields',
+        title: 'Custom Fields',
+        description: 'Extra fields on tickets and clients — warranty dates, license keys, asset tags',
+      },
     ],
   },
   {
