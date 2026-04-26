@@ -337,6 +337,7 @@ export function CommentComposer({ ticketId }: { ticketId: string }) {
       </div>
       <textarea
         ref={textareaRef}
+        data-comment-composer
         value={body}
         onChange={handleChange}
         onKeyDown={handleKeyDown}

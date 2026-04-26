@@ -131,10 +131,12 @@ export function BulkTicketTable({
               return (
                 <tr
                   key={t.id}
+                  data-shortcut-row
+                  data-shortcut-href={`/tickets/${t.id}`}
                   className={
                     checked
-                      ? 'group bg-accent/5 transition-colors'
-                      : 'group transition-colors hover:bg-th-elevated'
+                      ? 'group bg-accent/5 transition-colors data-[shortcut-active=true]:outline data-[shortcut-active=true]:outline-2 data-[shortcut-active=true]:outline-accent'
+                      : 'group transition-colors hover:bg-th-elevated data-[shortcut-active=true]:outline data-[shortcut-active=true]:outline-2 data-[shortcut-active=true]:outline-accent'
                   }
                 >
                   <td

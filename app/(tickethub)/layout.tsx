@@ -5,6 +5,8 @@ import { InstallPrompt } from '@/app/components/InstallPrompt'
 import { SyncStatusBadge } from '@/app/components/SyncStatusBadge'
 import { LocationTracker } from '@/app/components/LocationTracker'
 import { PresenceHeartbeat } from '@/app/components/PresenceHeartbeat'
+import { CommandPalette } from '@/app/components/CommandPalette'
+import { ShortcutHandler } from '@/app/components/ShortcutHandler'
 import { getMyTimer } from '@/app/lib/actions/timer'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/app/lib/auth'
@@ -95,6 +97,8 @@ export default async function TicketHubLayout({
       <SyncStatusBadge />
       <LocationTracker />
       <PresenceHeartbeat />
+      <CommandPalette />
+      <ShortcutHandler />
     </div>
   )
 }
