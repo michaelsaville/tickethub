@@ -62,6 +62,7 @@ export function CommentComposer({ ticketId }: { ticketId: string }) {
   const [cannedTrigger, setCannedTrigger] = useState<TriggerInfo | null>(null)
   const [mentionTrigger, setMentionTrigger] = useState<TriggerInfo | null>(null)
   const [highlightIndex, setHighlightIndex] = useState(0)
+  const [pastingCount, setPastingCount] = useState(0)
 
   const filteredReplies = useMemo(() => {
     if (!cannedTrigger) return []
@@ -189,6 +190,90 @@ export function CommentComposer({ ticketId }: { ticketId: string }) {
       if (ta) {
         ta.focus()
         ta.setSelectionRange(caretPos, caretPos)
+      }
+    })
+  }
+
+  async function handlePaste(e: React.ClipboardEvent<HTMLTextAreaElement>) {
+    const items = e.clipboardData?.items
+    if (!items || items.length === 0) return
+    const imageFiles: File[] = []
+    for (let i = 0; i < items.length; i++) {
+      const it = items[i]
+      if (it.kind === 'file' && it.type.startsWith('image/')) {
+        const f = it.getAsFile()
+        if (f) imageFiles.push(f)
+      }
+    }
+    if (imageFiles.length === 0) return
+    e.preventDefault()
+
+    const ta = textareaRef.current
+    const caret = ta?.selectionStart ?? body.length
+    let nextBody = body
+    let cursorAt = caret
+    setPastingCount((c) => c + imageFiles.length)
+    setErr(null)
+
+    for (const file of imageFiles) {
+      const stamp = new Date()
+        .toISOString()
+        .replace(/[:.]/g, '-')
+        .slice(0, 19)
+      const ext = file.type.split('/')[1] || 'png'
+      const named =
+        file.name && file.name !== 'image.png'
+          ? file
+          : new File([file], `pasted-${stamp}.${ext}`, { type: file.type })
+
+      // Drop a placeholder marker at the caret while uploading.
+      const placeholder = `[Pasted: ${named.name} — uploading…]\n`
+      const before = nextBody.slice(0, cursorAt)
+      const after = nextBody.slice(cursorAt)
+      nextBody = before + placeholder + after
+      cursorAt = before.length + placeholder.length
+      setBody(nextBody)
+
+      try {
+        const fd = new FormData()
+        fd.append('file', named)
+        const res = await fetch(`/api/tickets/${ticketId}/attachments`, {
+          method: 'POST',
+          body: fd,
+        })
+        const ct = res.headers.get('content-type') ?? ''
+        if (!res.ok || !ct.includes('application/json')) {
+          throw new Error(
+            res.status === 413
+              ? 'Image too large for the server'
+              : `Upload failed (${res.status})`,
+          )
+        }
+        const json = (await res.json()) as { error?: string }
+        if (json.error) throw new Error(json.error)
+
+        const replacement = `[Pasted: ${named.name}]\n`
+        nextBody = nextBody.replace(placeholder, replacement)
+        cursorAt = cursorAt - placeholder.length + replacement.length
+        setBody(nextBody)
+      } catch (uploadErr) {
+        const msg =
+          uploadErr instanceof Error ? uploadErr.message : 'upload failed'
+        setErr(msg)
+        nextBody = nextBody.replace(placeholder, `[Paste failed: ${msg}]\n`)
+        setBody(nextBody)
+      } finally {
+        setPastingCount((c) => Math.max(0, c - 1))
+      }
+    }
+
+    // Refresh server-rendered attachments list.
+    router.refresh()
+    requestAnimationFrame(() => {
+      const t = textareaRef.current
+      if (t) {
+        t.focus()
+        t.setSelectionRange(cursorAt, cursorAt)
       }
     })
   }
@@ -343,6 +428,7 @@ export function CommentComposer({ ticketId }: { ticketId: string }) {
         onKeyDown={handleKeyDown}
         onKeyUp={handleSelect}
         onClick={handleSelect}
+        onPaste={handlePaste}
         onFocus={() => {
           ensureRepliesLoaded()
           ensureUsersLoaded()
@@ -376,6 +462,12 @@ export function CommentComposer({ ticketId }: { ticketId: string }) {
           onHover={setHighlightIndex}
           loading={usersLoading && filteredUsers.length === 0}
         />
+      )}
+      {pastingCount > 0 && (
+        <div className="mt-2 rounded-md border border-th-border bg-th-elevated px-3 py-1.5 text-xs text-th-text-secondary">
+          Uploading {pastingCount} pasted image
+          {pastingCount === 1 ? '' : 's'}…
+        </div>
       )}
       {err && (
         <div className="mt-2 rounded-md border border-priority-urgent/40 bg-priority-urgent/10 px-3 py-1.5 text-xs text-priority-urgent">

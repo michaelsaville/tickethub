@@ -58,15 +58,25 @@ export default async function ClientDetailPage({
         >
           ← Back to clients
         </Link>
-        <div className="mt-2 flex items-baseline gap-3">
-          <h1 className="font-mono text-2xl text-slate-100">{client.name}</h1>
-          {client.shortCode && (
-            <span className="font-mono text-sm text-th-text-muted">
-              {client.shortCode}
-            </span>
-          )}
-          {!client.isActive && (
-            <span className="text-xs text-th-text-muted">(inactive)</span>
+        <div className="mt-2 flex flex-wrap items-baseline justify-between gap-3">
+          <div className="flex items-baseline gap-3">
+            <h1 className="font-mono text-2xl text-slate-100">{client.name}</h1>
+            {client.shortCode && (
+              <span className="font-mono text-sm text-th-text-muted">
+                {client.shortCode}
+              </span>
+            )}
+            {!client.isActive && (
+              <span className="text-xs text-th-text-muted">(inactive)</span>
+            )}
+          </div>
+          {client.isActive && (
+            <Link
+              href={`/tickets/new?clientId=${client.id}`}
+              className="th-btn-primary text-sm"
+            >
+              + New ticket
+            </Link>
           )}
         </div>
       </header>
