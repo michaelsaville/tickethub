@@ -8,6 +8,10 @@ import type {
   TH_TicketType,
 } from '@prisma/client'
 import { enqueueRequest, type EnqueueInput } from '@/app/lib/sync-queue'
+import {
+  useEnumDisplay,
+  useEnumList,
+} from '@/app/components/EnumOverridesProvider'
 
 const STATUSES: TH_TicketStatus[] = [
   'NEW',
@@ -182,18 +186,11 @@ export function TicketProperties({
         <label className="mb-1 block font-mono text-[10px] uppercase tracking-wider text-th-text-muted">
           Status
         </label>
-        <select
-          value={status}
+        <StatusSelect
+          status={status}
           disabled={isPending}
-          onChange={(e) => changeStatus(e.target.value as TH_TicketStatus)}
-          className="th-input"
-        >
-          {STATUSES.map((s) => (
-            <option key={s} value={s}>
-              {s.replace(/_/g, ' ')}
-            </option>
-          ))}
-        </select>
+          onChange={changeStatus}
+        />
       </div>
 
       <div>
@@ -223,18 +220,11 @@ export function TicketProperties({
         <label className="mb-1 block font-mono text-[10px] uppercase tracking-wider text-th-text-muted">
           Priority
         </label>
-        <select
-          value={priority}
+        <PrioritySelect
+          priority={priority}
           disabled={isPending}
-          onChange={(e) => changePriority(e.target.value as TH_TicketPriority)}
-          className="th-input"
-        >
-          {PRIORITIES.map((p) => (
-            <option key={p} value={p}>
-              {p}
-            </option>
-          ))}
-        </select>
+          onChange={changePriority}
+        />
       </div>
 
       <div>
@@ -310,6 +300,75 @@ export function TicketProperties({
         />
       )}
     </div>
+  )
+}
+
+function StatusSelect({
+  status,
+  disabled,
+  onChange,
+}: {
+  status: TH_TicketStatus
+  disabled: boolean
+  onChange: (v: TH_TicketStatus) => void
+}) {
+  const list = useEnumList('TICKET_STATUS')
+  const currentDisplay = useEnumDisplay('TICKET_STATUS', status)
+  const visible = list.map((d) => d.value)
+  // Always include the current value so a hidden status still shows here.
+  const options: { value: string; label: string }[] = visible.includes(status)
+    ? list.map((d) => ({ value: d.value, label: d.label }))
+    : [
+        { value: status, label: currentDisplay.label },
+        ...list.map((d) => ({ value: d.value, label: d.label })),
+      ]
+  return (
+    <select
+      value={status}
+      disabled={disabled}
+      onChange={(e) => onChange(e.target.value as TH_TicketStatus)}
+      className="th-input"
+    >
+      {options.map((o) => (
+        <option key={o.value} value={o.value}>
+          {o.label}
+        </option>
+      ))}
+    </select>
+  )
+}
+
+function PrioritySelect({
+  priority,
+  disabled,
+  onChange,
+}: {
+  priority: TH_TicketPriority
+  disabled: boolean
+  onChange: (v: TH_TicketPriority) => void
+}) {
+  const list = useEnumList('TICKET_PRIORITY')
+  const currentDisplay = useEnumDisplay('TICKET_PRIORITY', priority)
+  const visible = list.map((d) => d.value)
+  const options: { value: string; label: string }[] = visible.includes(priority)
+    ? list.map((d) => ({ value: d.value, label: d.label }))
+    : [
+        { value: priority, label: currentDisplay.label },
+        ...list.map((d) => ({ value: d.value, label: d.label })),
+      ]
+  return (
+    <select
+      value={priority}
+      disabled={disabled}
+      onChange={(e) => onChange(e.target.value as TH_TicketPriority)}
+      className="th-input"
+    >
+      {options.map((o) => (
+        <option key={o.value} value={o.value}>
+          {o.label}
+        </option>
+      ))}
+    </select>
   )
 }
 

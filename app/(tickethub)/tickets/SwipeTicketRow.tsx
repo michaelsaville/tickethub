@@ -6,6 +6,7 @@ import { useRef, useState, type PointerEvent as ReactPointerEvent } from 'react'
 import type { TH_TicketStatus } from '@prisma/client'
 import { SlaBadge } from '@/app/components/SlaBadge'
 import { enqueueRequest } from '@/app/lib/sync-queue'
+import { EnumLabel } from '@/app/components/EnumLabel'
 
 type RowTicket = {
   id: string
@@ -203,9 +204,11 @@ export function SwipeTicketRow({
           </div>
           <div className="flex flex-col items-end gap-1">
             <SlaBadge ticket={ticket} />
-            <span className={statusBadgeClass}>
-              {(pending ?? ticket.status).replace(/_/g, ' ')}
-            </span>
+            <EnumLabel
+              name="TICKET_STATUS"
+              value={pending ?? ticket.status}
+              className={statusBadgeClass}
+            />
           </div>
         </Link>
       </div>

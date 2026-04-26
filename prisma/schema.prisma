@@ -1034,6 +1034,38 @@ model TH_CannedReply {
   @@schema("tickethub")
 }
 
+// ─── ENUM OVERRIDES ───────────────────────────────────────────────────────
+
+/// Per-value display overrides for the three customizable ticket enums:
+/// TICKET_STATUS, TICKET_PRIORITY, TICKET_TYPE. Lets admins rename labels
+/// ("In Progress" → "Working On It"), recolor badges, or hide values they
+/// don't use from new pickers — without changing the underlying enum
+/// values (which keep SLA logic, transitions, and type safety intact).
+model TH_EnumOverride {
+  id String @id @default(cuid())
+  /// Logical enum name. Currently 'TICKET_STATUS', 'TICKET_PRIORITY', or
+  /// 'TICKET_TYPE'. Plain string so we can add more without a migration.
+  enumName String
+  /// The underlying enum value (e.g. 'IN_PROGRESS', 'URGENT'). NOT the
+  /// human label — this is the stable identifier the rest of the codebase
+  /// uses.
+  enumValue String
+  /// Override label. NULL = use the default (Title Case from value).
+  label String?
+  /// Override color, hex format `#rrggbb`. NULL = use the default CSS var.
+  color String?
+  /// When true, this value is filtered out of selectable pickers but still
+  /// renders correctly anywhere a ticket already has it. Lets admins
+  /// retire statuses/types without breaking history.
+  hidden Boolean @default(false)
+
+  updatedAt DateTime @updatedAt
+
+  @@unique([enumName, enumValue])
+  @@map("th_enum_overrides")
+  @@schema("tickethub")
+}
+
 // ─── CUSTOM FIELDS ────────────────────────────────────────────────────────
 
 enum TH_CustomFieldEntity {

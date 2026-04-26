@@ -3,6 +3,7 @@ import { redirect } from 'next/navigation'
 import { prisma } from '@/app/lib/prisma'
 import { requireAuth } from '@/app/lib/api-auth'
 import { SlaBadge } from '@/app/components/SlaBadge'
+import { EnumLabel } from '@/app/components/EnumLabel'
 
 export const dynamic = 'force-dynamic'
 
@@ -181,11 +182,11 @@ export default async function DashboardPage() {
                     {t.client.shortCode ?? t.client.name}
                   </span>
                   <SlaBadge ticket={t} />
-                  <span
+                  <EnumLabel
+                    name="TICKET_STATUS"
+                    value={t.status}
                     className={`badge-status-${t.status.toLowerCase().replace(/_/g, '-')}`}
-                  >
-                    {t.status.replace(/_/g, ' ')}
-                  </span>
+                  />
                 </Link>
               </li>
             ))}

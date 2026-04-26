@@ -38,6 +38,11 @@ const GROUPS = [
         title: 'Custom Fields',
         description: 'Extra fields on tickets and clients — warranty dates, license keys, asset tags',
       },
+      {
+        href: '/settings/enums',
+        title: 'Status, Priority & Type Customization',
+        description: 'Rename labels, recolor badges, hide values you don\'t use',
+      },
     ],
   },
   {

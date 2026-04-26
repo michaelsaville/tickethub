@@ -7,7 +7,10 @@ import { LocationTracker } from '@/app/components/LocationTracker'
 import { PresenceHeartbeat } from '@/app/components/PresenceHeartbeat'
 import { CommandPalette } from '@/app/components/CommandPalette'
 import { ShortcutHandler } from '@/app/components/ShortcutHandler'
+import { EnumOverridesProvider } from '@/app/components/EnumOverridesProvider'
+import { EnumColorStyles } from '@/app/components/EnumColorStyles'
 import { getMyTimer } from '@/app/lib/actions/timer'
+import { getAllEnumDisplays } from '@/app/lib/enum-overrides'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/app/lib/auth'
 import { prisma } from '@/app/lib/prisma'
@@ -55,6 +58,8 @@ export default async function TicketHubLayout({
       : Promise.resolve(0),
   ])
 
+  const enums = await getAllEnumDisplays()
+
   const timer = await getMyTimer()
   const timerBarProps = timer
     ? {
@@ -68,6 +73,8 @@ export default async function TicketHubLayout({
     : null
 
   return (
+    <EnumOverridesProvider value={enums}>
+    <EnumColorStyles enums={enums} />
     <div className="flex h-screen">
       {/* Desktop sidebar — hidden below md */}
       <div className="hidden md:block">
@@ -100,5 +107,6 @@ export default async function TicketHubLayout({
       <CommandPalette />
       <ShortcutHandler />
     </div>
+    </EnumOverridesProvider>
   )
 }

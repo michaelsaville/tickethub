@@ -6,6 +6,7 @@ import { useRouter } from 'next/navigation'
 import type { TH_TicketPriority, TH_TicketStatus } from '@prisma/client'
 import { SlaBadge } from '@/app/components/SlaBadge'
 import { bulkUpdateTickets } from '@/app/lib/actions/bulk-tickets'
+import { EnumLabel } from '@/app/components/EnumLabel'
 
 type TicketRow = {
   id: string
@@ -193,9 +194,11 @@ export function BulkTicketTable({
                     <SlaBadge ticket={t} />
                   </td>
                   <td className="px-3 py-2">
-                    <span className={statusBadgeClass(t.status)}>
-                      {t.status.replace(/_/g, ' ')}
-                    </span>
+                    <EnumLabel
+                      name="TICKET_STATUS"
+                      value={t.status}
+                      className={statusBadgeClass(t.status)}
+                    />
                   </td>
                   <td className="px-3 py-2 text-right font-mono text-[10px] text-th-text-muted">
                     {formatRelative(t.updatedAt)}
