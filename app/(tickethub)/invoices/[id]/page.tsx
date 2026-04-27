@@ -46,6 +46,24 @@ export default async function InvoiceDetailPage({
   })
   if (!invoice) notFound()
 
+  // Distinct tickets contributing to this invoice — derived from the
+  // already-loaded charges. Ordered by ticket number so the chip strip
+  // is stable across renders. Charges without a ticket (e.g. recurring
+  // CONTRACT_FEE auto-bills) get filtered out implicitly.
+  const linkedTicketsMap = new Map<
+    string,
+    { id: string; ticketNumber: number; title: string }
+  >()
+  for (const c of invoice.charges) {
+    if (!c.ticket) continue
+    if (!linkedTicketsMap.has(c.ticket.id)) {
+      linkedTicketsMap.set(c.ticket.id, c.ticket)
+    }
+  }
+  const linkedTickets = [...linkedTicketsMap.values()].sort(
+    (a, b) => a.ticketNumber - b.ticketNumber,
+  )
+
   const defaultTo =
     invoice.client.billingEmail ?? invoice.client.contacts[0]?.email ?? ''
   const defaultSubject = `Invoice #${invoice.invoiceNumber} from ${ORG.name}`
@@ -94,6 +112,26 @@ export default async function InvoiceDetailPage({
               ` · due ${invoice.dueDate.toLocaleDateString()}`}
             {invoice.taxState && ` · ${invoice.taxState} ${formatRate(invoice.taxRate)}`}
           </p>
+          {linkedTickets.length > 0 && (
+            <div className="mt-3 flex flex-wrap items-center gap-2">
+              <span className="font-mono text-[10px] uppercase tracking-wider text-th-text-muted">
+                {linkedTickets.length === 1 ? 'Ticket' : 'Tickets'}
+              </span>
+              {linkedTickets.map((t) => (
+                <Link
+                  key={t.id}
+                  href={`/tickets/${t.id}`}
+                  className="inline-flex items-center gap-1.5 rounded-full border border-th-border bg-th-surface px-2.5 py-0.5 text-xs text-th-text-secondary hover:border-accent/40 hover:text-accent"
+                  title={t.title}
+                >
+                  <span className="font-mono text-th-text-muted">
+                    #{t.ticketNumber}
+                  </span>
+                  <span className="max-w-[18ch] truncate">{t.title}</span>
+                </Link>
+              ))}
+            </div>
+          )}
         </div>
         <div className="flex flex-col items-end gap-2">
           <div className="flex items-center gap-2">

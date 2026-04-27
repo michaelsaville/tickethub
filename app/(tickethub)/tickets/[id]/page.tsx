@@ -114,6 +114,19 @@ export default async function TicketDetailPage({
         include: {
           item: { select: { name: true, code: true } },
           technician: { select: { name: true } },
+          // Pull the linked invoice (when one exists) so the header can
+          // collapse charges into a "View invoice" pill instead of just
+          // "Invoice Now". Filter out soft-deleted invoices so a deleted
+          // (or voided) invoice automatically rolls the UI back to
+          // "Invoice Now" on the next render.
+          invoice: {
+            select: {
+              id: true,
+              invoiceNumber: true,
+              status: true,
+              deletedAt: true,
+            },
+          },
         },
       },
       comments: {
@@ -199,8 +212,32 @@ export default async function TicketDetailPage({
     'CLOSED',
     'CANCELLED',
   ]
+
+  // Distinct invoices this ticket's charges have landed on. Soft-deleted
+  // and voided invoices are filtered out at query time (charges of voided
+  // invoices have invoiceId nulled by updateInvoiceStatus → so they
+  // don't even appear here). Order by invoice number so the UI stable-sorts.
+  const linkedInvoiceMap = new Map<
+    string,
+    { id: string; invoiceNumber: number; status: string }
+  >()
+  for (const c of ticket.charges) {
+    if (!c.invoice || c.invoice.deletedAt) continue
+    if (!linkedInvoiceMap.has(c.invoice.id)) {
+      linkedInvoiceMap.set(c.invoice.id, {
+        id: c.invoice.id,
+        invoiceNumber: c.invoice.invoiceNumber,
+        status: c.invoice.status,
+      })
+    }
+  }
+  const linkedInvoices = [...linkedInvoiceMap.values()].sort(
+    (a, b) => a.invoiceNumber - b.invoiceNumber,
+  )
+
   const showInvoiceNow =
     canSeeAmounts &&
+    linkedInvoices.length === 0 &&
     billableChargeCount > 0 &&
     closingStatuses.includes(ticket.status)
 
@@ -220,6 +257,37 @@ export default async function TicketDetailPage({
             </span>
             <EditableTitle ticketId={ticket.id} initialTitle={ticket.title} />
           </div>
+          {canSeeAmounts && linkedInvoices.length > 0 && (
+            <div className="flex flex-wrap items-center gap-2">
+              {linkedInvoices.map((inv) => (
+                <Link
+                  key={inv.id}
+                  href={`/invoices/${inv.id}`}
+                  className="th-btn-secondary text-sm"
+                  title={`This ticket's charges are on invoice #${inv.invoiceNumber}`}
+                >
+                  🧾 Invoice #{inv.invoiceNumber}
+                  <span className="ml-1.5 font-mono text-[10px] uppercase tracking-wider text-th-text-muted">
+                    {inv.status}
+                  </span>
+                </Link>
+              ))}
+              {/* Even when an invoice is linked, allow billing the *new*
+                  charges that landed since (rolling-bill scenario). */}
+              {billableChargeCount > 0 &&
+                closingStatuses.includes(ticket.status) && (
+                  <Link
+                    href={`/invoices/new?clientId=${ticket.client.id}&ticketId=${ticket.id}`}
+                    className="th-btn-primary text-sm"
+                    title={`Invoice the ${billableChargeCount} new BILLABLE ${
+                      billableChargeCount === 1 ? 'charge' : 'charges'
+                    } that aren't on an invoice yet`}
+                  >
+                    + bill {billableChargeCount} new
+                  </Link>
+                )}
+            </div>
+          )}
           {showInvoiceNow && (
             <Link
               href={`/invoices/new?clientId=${ticket.client.id}&ticketId=${ticket.id}`}
