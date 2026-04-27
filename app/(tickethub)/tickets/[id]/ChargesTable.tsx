@@ -1,8 +1,9 @@
 'use client'
 
 import { useState, useTransition } from 'react'
+import { useRouter } from 'next/navigation'
 import type { TH_ChargeStatus, TH_ChargeType } from '@prisma/client'
-import { updateChargeStatus } from '@/app/lib/actions/charges'
+import { deleteCharge, updateChargeStatus } from '@/app/lib/actions/charges'
 import { formatCents } from '@/app/lib/billing'
 
 type Charge = {
@@ -84,6 +85,7 @@ function ChargeRow({
   charge: Charge
   showAmounts: boolean
 }) {
+  const router = useRouter()
   const [status, setStatus] = useState(charge.status)
   const [err, setErr] = useState<string | null>(null)
   const [isPending, startTransition] = useTransition()
@@ -104,6 +106,30 @@ function ChargeRow({
         setErr(res.error)
         setStatus(prev)
       }
+    })
+  }
+
+  function remove() {
+    if (locked) return
+    const label =
+      charge.timeChargedMinutes != null
+        ? formatMinutes(charge.timeChargedMinutes)
+        : `${charge.quantity} × ${charge.item.name}`
+    const reason = window.prompt(
+      `Delete this entry (${label})? This is logged to the ticket timeline.\n\nOptional reason:`,
+      '',
+    )
+    // window.prompt returns null when the user cancels, '' when they hit OK
+    // with no input. Only abort on cancel.
+    if (reason === null) return
+    setErr(null)
+    startTransition(async () => {
+      const res = await deleteCharge(charge.id, reason || null)
+      if (!res.ok) {
+        setErr(res.error)
+        return
+      }
+      router.refresh()
     })
   }
 
@@ -164,6 +190,18 @@ function ChargeRow({
           className={statusButtonClass(status, locked)}
         >
           {status.replace(/_/g, ' ')}
+        </button>
+      )}
+      {!locked && (
+        <button
+          type="button"
+          onClick={remove}
+          disabled={isPending}
+          title="Delete this entry (soft delete with audit trail)"
+          aria-label="Delete entry"
+          className="rounded-md p-1 text-th-text-muted transition-colors hover:bg-priority-urgent/10 hover:text-priority-urgent disabled:opacity-50"
+        >
+          🗑
         </button>
       )}
     </li>

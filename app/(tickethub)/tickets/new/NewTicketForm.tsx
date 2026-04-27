@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { useFormState, useFormStatus } from 'react-dom'
 import { createTicket, type CreateTicketResult } from '@/app/lib/actions/tickets'
+import { ClientPicker } from '@/app/components/shared/ClientPicker'
 
 type Client = { id: string; name: string; shortCode: string | null }
 type Tech = { id: string; name: string }
@@ -240,32 +241,13 @@ export function NewTicketForm({
           </div>
         )}
 
-        <div>
-          <label
-            htmlFor="clientId"
-            className="mb-1 block font-mono text-[10px] uppercase tracking-wider text-th-text-muted"
-          >
-            Client *
-          </label>
-          <select
-            id="clientId"
-            name="clientId"
-            value={clientId}
-            onChange={(e) => setClientId(e.target.value)}
-            required
-            className="th-input"
-          >
-            <option value="" disabled>
-              Select a client…
-            </option>
-            {clients.map((c) => (
-              <option key={c.id} value={c.id}>
-                {c.name}
-                {c.shortCode ? ` (${c.shortCode})` : ''}
-              </option>
-            ))}
-          </select>
-        </div>
+        <input type="hidden" name="clientId" value={clientId} required />
+        <ClientPicker
+          mode="select"
+          clients={clients}
+          selectedId={clientId || null}
+          onPick={(c) => setClientId(c.id)}
+        />
 
         {context && context.contracts.length > 1 && (
           <div>

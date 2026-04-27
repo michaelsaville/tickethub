@@ -5,13 +5,14 @@ import { requireAuth, hasMinRole } from '@/app/lib/api-auth'
 import { formatRate } from '@/app/lib/tax'
 import { rateForStateAsync } from '@/app/lib/tax-server'
 import { InvoicePicker, type PickerCharge } from './InvoicePicker'
+import { ClientPicker } from '@/app/components/shared/ClientPicker'
 
 export const dynamic = 'force-dynamic'
 
 export default async function NewInvoicePage({
   searchParams,
 }: {
-  searchParams: Promise<{ clientId?: string }>
+  searchParams: Promise<{ clientId?: string; ticketId?: string }>
 }) {
   const { session, error } = await requireAuth()
   if (error) redirect('/api/auth/signin')
@@ -33,24 +34,15 @@ export default async function NewInvoicePage({
           ← Invoices
         </Link>
         <h1 className="mt-2 font-mono text-2xl text-slate-100">New Invoice</h1>
-        <p className="mt-1 text-sm text-th-text-secondary">
+        <p className="mb-4 mt-1 text-sm text-th-text-secondary">
           Pick a client — you can choose which billable charges to include.
         </p>
-        <ul className="mt-6 divide-y divide-th-border overflow-hidden rounded-lg border border-th-border bg-th-surface">
-          {clients.map((c) => (
-            <li key={c.id}>
-              <Link
-                href={`/invoices/new?clientId=${c.id}`}
-                className="flex items-center gap-3 px-4 py-3 transition-colors hover:bg-th-elevated"
-              >
-                <span className="flex-1 text-slate-100">{c.name}</span>
-                <span className="font-mono text-xs text-th-text-muted">
-                  {c.billingState ?? 'no tax state'}
-                </span>
-              </Link>
-            </li>
-          ))}
-        </ul>
+        <ClientPicker
+          mode="navigate"
+          clients={clients}
+          hrefTemplate="/invoices/new?clientId={id}"
+          label="Client"
+        />
       </div>
     )
   }
@@ -61,7 +53,7 @@ export default async function NewInvoicePage({
       contracts: {
         include: {
           charges: {
-            where: { status: 'BILLABLE' },
+            where: { status: 'BILLABLE', deletedAt: null },
             include: {
               item: { select: { name: true, taxable: true, type: true } },
               ticket: { select: { id: true, ticketNumber: true, title: true } },
@@ -137,6 +129,7 @@ export default async function NewInvoicePage({
         canSeeAmounts={canSeeAmounts}
         canInvoice={canInvoice}
         stateReason={stateReason}
+        preselectedTicketId={sp.ticketId ?? null}
       />
     </div>
   )

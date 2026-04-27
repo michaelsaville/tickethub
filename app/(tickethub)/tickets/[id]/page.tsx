@@ -5,6 +5,7 @@ import { requireAuth, hasMinRole } from '@/app/lib/api-auth'
 import { SlaBadge } from '@/app/components/SlaBadge'
 import { TicketProperties } from './TicketProperties'
 import { EditableTitle } from './EditableTitle'
+import { EditableDescription } from './EditableDescription'
 import { CommentComposer } from './CommentComposer'
 import { MergeTicketButton } from './MergeTicketButton'
 import { PageOnCallButton } from './PageOnCallButton'
@@ -91,6 +92,7 @@ export default async function TicketDetailPage({
           status: true,
           assignedTo: { select: { id: true, name: true } },
           charges: {
+            where: { deletedAt: null },
             select: {
               totalPrice: true,
               timeChargedMinutes: true,
@@ -107,6 +109,7 @@ export default async function TicketDetailPage({
       signatures: { orderBy: { createdAt: 'desc' } },
       tags: { select: { tag: true }, orderBy: { tag: 'asc' } },
       charges: {
+        where: { deletedAt: null },
         orderBy: { workDate: 'desc' },
         include: {
           item: { select: { name: true, code: true } },
@@ -188,6 +191,19 @@ export default async function TicketDetailPage({
       user: e.user ? { name: e.user.name } : null,
     }))
 
+  const billableChargeCount = ticket.charges.filter(
+    (c) => c.status === 'BILLABLE',
+  ).length
+  const closingStatuses: Array<typeof ticket.status> = [
+    'RESOLVED',
+    'CLOSED',
+    'CANCELLED',
+  ]
+  const showInvoiceNow =
+    canSeeAmounts &&
+    billableChargeCount > 0 &&
+    closingStatuses.includes(ticket.status)
+
   return (
     <div className="p-6">
       <header className="mb-6">
@@ -197,11 +213,24 @@ export default async function TicketDetailPage({
         >
           ← Back to tickets
         </Link>
-        <div className="mt-2 flex items-baseline gap-3">
-          <span className="font-mono text-sm text-th-text-muted">
-            #{ticket.ticketNumber}
-          </span>
-          <EditableTitle ticketId={ticket.id} initialTitle={ticket.title} />
+        <div className="mt-2 flex flex-wrap items-baseline justify-between gap-3">
+          <div className="flex items-baseline gap-3">
+            <span className="font-mono text-sm text-th-text-muted">
+              #{ticket.ticketNumber}
+            </span>
+            <EditableTitle ticketId={ticket.id} initialTitle={ticket.title} />
+          </div>
+          {showInvoiceNow && (
+            <Link
+              href={`/invoices/new?clientId=${ticket.client.id}&ticketId=${ticket.id}`}
+              className="th-btn-primary text-sm"
+              title={`Open the invoice picker pre-scoped to this ticket's ${billableChargeCount} BILLABLE ${
+                billableChargeCount === 1 ? 'charge' : 'charges'
+              }`}
+            >
+              🧾 Invoice Now ({billableChargeCount})
+            </Link>
+          )}
         </div>
         <div className="mt-1 text-xs text-th-text-secondary">
           Opened by {ticket.createdBy.name} ·{' '}
@@ -374,16 +403,11 @@ export default async function TicketDetailPage({
 
         {/* Middle: Description + Timeline + Composer */}
         <div className="space-y-4">
-          {ticket.description && (
-            <div className="th-card">
-              <div className="mb-2 font-mono text-[10px] uppercase tracking-wider text-th-text-muted">
-                Description
-              </div>
-              <div className="whitespace-pre-wrap text-sm text-slate-200">
-                {ticket.description}
-              </div>
-            </div>
-          )}
+          <EditableDescription
+            ticketId={ticket.id}
+            initialDescription={ticket.description}
+          />
+
 
           <div className="th-card">
             <div className="mb-3 font-mono text-[10px] uppercase tracking-wider text-th-text-muted">

@@ -119,6 +119,7 @@ export async function GET(req: NextRequest) {
     where: {
       ticket: { clientId },
       workDate: { gte: start, lte: end },
+      deletedAt: null,
     },
     select: {
       type: true,

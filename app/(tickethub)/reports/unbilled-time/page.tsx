@@ -26,6 +26,7 @@ export default async function UnbilledTimeReportPage({
       status: 'BILLABLE',
       invoiceId: null,
       isBillable: true,
+      deletedAt: null,
     },
     select: {
       id: true,

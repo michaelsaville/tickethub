@@ -15,7 +15,7 @@ export default async function TimeApprovalsPage() {
   }
 
   const charges = await prisma.tH_Charge.findMany({
-    where: { status: 'PENDING_REVIEW', type: 'LABOR' },
+    where: { status: 'PENDING_REVIEW', type: 'LABOR', deletedAt: null },
     orderBy: [{ workDate: 'asc' }, { createdAt: 'asc' }],
     select: {
       id: true,

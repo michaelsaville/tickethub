@@ -53,7 +53,11 @@ export default async function TicketHubLayout({
       : Promise.resolve(0),
     isAdmin
       ? prisma.tH_Charge.count({
-          where: { status: 'PENDING_REVIEW', type: 'LABOR' },
+          where: {
+            status: 'PENDING_REVIEW',
+            type: 'LABOR',
+            deletedAt: null,
+          },
         })
       : Promise.resolve(0),
   ])

@@ -63,6 +63,7 @@ export const EVENT_TYPES = {
   // Charge
   CHARGE_ADDED: 'charge.added',
   CHARGE_BILLABLE_TOGGLED: 'charge.billable_toggled',
+  CHARGE_DELETED: 'charge.deleted',
 
   // Invoice
   INVOICE_CREATED: 'invoice.created',

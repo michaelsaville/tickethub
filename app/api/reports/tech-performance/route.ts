@@ -52,6 +52,7 @@ export async function GET(req: NextRequest) {
       type: 'LABOR',
       workDate: { gte: start, lte: end },
       technicianId: { not: null },
+      deletedAt: null,
     },
     select: {
       technicianId: true,

@@ -32,7 +32,11 @@ export async function approveTimeCharges(input: {
   }
 
   const charges = await prisma.tH_Charge.findMany({
-    where: { id: { in: input.chargeIds }, status: 'PENDING_REVIEW' },
+    where: {
+      id: { in: input.chargeIds },
+      status: 'PENDING_REVIEW',
+      deletedAt: null,
+    },
     select: {
       id: true,
       ticketId: true,

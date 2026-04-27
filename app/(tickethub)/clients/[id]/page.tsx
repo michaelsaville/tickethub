@@ -3,6 +3,7 @@ import { notFound, redirect } from 'next/navigation'
 import { prisma } from '@/app/lib/prisma'
 import { requireAuth, hasMinRole } from '@/app/lib/api-auth'
 import { BillingSettings } from './TaxStateSelector'
+import { EditClientButton } from './EditClientButton'
 import { startPortalImpersonationAction } from '@/app/lib/actions/portal-impersonate'
 import { CustomFieldsCard } from '@/app/components/CustomFieldsCard'
 
@@ -46,7 +47,11 @@ export default async function ClientDetailPage({
   if (!client) notFound()
 
   const billableCount = await prisma.tH_Charge.count({
-    where: { status: 'BILLABLE', contract: { clientId: client.id } },
+    where: {
+      status: 'BILLABLE',
+      deletedAt: null,
+      contract: { clientId: client.id },
+    },
   })
 
   // Cross-app deep-link: DocHub stores a Client row keyed by name. Match by
@@ -81,6 +86,15 @@ export default async function ClientDetailPage({
             )}
           </div>
           <div className="flex flex-wrap items-center gap-2">
+            <EditClientButton
+              client={{
+                id: client.id,
+                name: client.name,
+                shortCode: client.shortCode,
+                internalNotes: client.internalNotes,
+                isActive: client.isActive,
+              }}
+            />
             {dochubClientId && (
               <a
                 href={`${DOCHUB_BASE}/clients/${dochubClientId}`}

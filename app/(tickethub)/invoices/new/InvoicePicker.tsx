@@ -33,6 +33,7 @@ export function InvoicePicker({
   canSeeAmounts,
   canInvoice,
   stateReason,
+  preselectedTicketId,
 }: {
   clientId: string
   billingState: string | null
@@ -41,11 +42,23 @@ export function InvoicePicker({
   canSeeAmounts: boolean
   canInvoice: boolean
   stateReason: string | null
+  /** When set, only charges from this ticket are pre-selected. Used by
+   *  the ticket-page "Invoice Now" deep-link so the picker opens already
+   *  scoped to that ticket; user can still extend the selection. */
+  preselectedTicketId?: string | null
 }) {
   const router = useRouter()
-  const [selected, setSelected] = useState<Set<string>>(
-    () => new Set(charges.map((c) => c.id)),
-  )
+  const [selected, setSelected] = useState<Set<string>>(() => {
+    if (preselectedTicketId) {
+      const matching = charges
+        .filter((c) => c.ticketId === preselectedTicketId)
+        .map((c) => c.id)
+      // Fall back to all-selected if the ticket hint matched zero charges
+      // (e.g. the user landed here with a stale ticket id).
+      if (matching.length > 0) return new Set(matching)
+    }
+    return new Set(charges.map((c) => c.id))
+  })
   const [notes, setNotes] = useState('')
   const [dueDays, setDueDays] = useState(30)
   const [err, setErr] = useState<string | null>(null)

@@ -36,6 +36,7 @@ export async function createInvoiceCore(
   const charges = await prisma.tH_Charge.findMany({
     where: {
       status: 'BILLABLE',
+      deletedAt: null,
       contract: { clientId },
       ...(opts.chargeIds && opts.chargeIds.length > 0
         ? { id: { in: opts.chargeIds } }

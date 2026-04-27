@@ -1,5 +1,6 @@
 import { prisma } from '@/app/lib/prisma'
 import EstimateBuilder from './EstimateBuilder'
+import { ClientPicker } from '@/app/components/shared/ClientPicker'
 
 export default async function NewEstimatePage({
   searchParams,
@@ -13,26 +14,23 @@ export default async function NewEstimatePage({
     const clients = await prisma.tH_Client.findMany({
       where: { isActive: true },
       orderBy: { name: 'asc' },
-      select: { id: true, name: true, billingState: true },
+      select: { id: true, name: true, shortCode: true, billingState: true },
     })
 
     return (
-      <div className="max-w-3xl mx-auto">
-        <h1 className="text-xl font-semibold mb-6">New Estimate — Select Client</h1>
-        <div className="th-card divide-y divide-th-border">
-          {clients.map(c => (
-            <a
-              key={c.id}
-              href={`/estimates/new?clientId=${c.id}`}
-              className="block px-4 py-3 hover:bg-th-elevated transition-colors"
-            >
-              <span className="font-medium">{c.name}</span>
-              {c.billingState && (
-                <span className="ml-2 text-xs text-th-secondary">{c.billingState}</span>
-              )}
-            </a>
-          ))}
-        </div>
+      <div className="max-w-3xl mx-auto p-6">
+        <h1 className="mb-1 font-mono text-2xl text-slate-100">
+          New Estimate
+        </h1>
+        <p className="mb-4 text-sm text-th-text-secondary">
+          Pick a client to start the estimate.
+        </p>
+        <ClientPicker
+          mode="navigate"
+          clients={clients}
+          hrefTemplate="/estimates/new?clientId={id}"
+          label="Client"
+        />
       </div>
     )
   }

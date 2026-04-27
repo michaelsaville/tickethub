@@ -323,3 +323,112 @@ export async function updateChargeStatus(
     return { ok: false, error: 'Failed to update charge' }
   }
 }
+
+/**
+ * Soft-delete a charge. Hard delete is forbidden by claude.md §5 — every
+ * delete leaves an audit trail via TH_TicketEvent.CHARGE_DELETED so the
+ * ticket timeline still shows what happened and who did it.
+ *
+ * Refuses to delete:
+ *   - INVOICED / LOCKED charges (void the invoice first)
+ *   - already-deleted charges (idempotent return)
+ *
+ * For LABOR on BLOCK_HOURS contracts, releases the bucket by decrementing
+ * contract.blockHoursUsed by the charge's quantity.
+ */
+export async function deleteCharge(
+  chargeId: string,
+  reason?: string | null,
+): Promise<ChargeResult> {
+  const userId = await getUserId()
+  if (!userId) return { ok: false, error: 'Unauthorized' }
+
+  try {
+    const current = await prisma.tH_Charge.findUnique({
+      where: { id: chargeId },
+      select: {
+        id: true,
+        status: true,
+        ticketId: true,
+        contractId: true,
+        type: true,
+        quantity: true,
+        timeChargedMinutes: true,
+        deletedAt: true,
+        item: { select: { name: true } },
+        contract: { select: { type: true } },
+      },
+    })
+    if (!current) return { ok: false, error: 'Charge not found' }
+    if (current.deletedAt) return { ok: true }
+    if (current.status === 'INVOICED' || current.status === 'LOCKED') {
+      return { ok: false, error: 'Locked — void the invoice first' }
+    }
+
+    const isBlockLabor =
+      current.type === 'LABOR' && current.contract?.type === 'BLOCK_HOURS'
+    const wasBillable = current.status === 'BILLABLE'
+    // Releasing the block-hours bucket only matters when the charge was
+    // actually counted against it (BILLABLE LABOR).
+    const blockHoursDelta =
+      isBlockLabor && wasBillable ? -current.quantity : 0
+
+    await prisma.$transaction(async (tx) => {
+      await tx.tH_Charge.update({
+        where: { id: chargeId },
+        data: {
+          deletedAt: new Date(),
+          deletedById: userId,
+          deletedReason: reason?.trim() || null,
+        },
+      })
+      if (blockHoursDelta !== 0) {
+        await tx.tH_Contract.update({
+          where: { id: current.contractId },
+          data: { blockHoursUsed: { increment: blockHoursDelta } },
+        })
+      }
+      if (current.ticketId) {
+        await tx.tH_TicketEvent.create({
+          data: {
+            ticketId: current.ticketId,
+            userId,
+            type: 'CHARGE_DELETED',
+            data: {
+              chargeId,
+              chargeType: current.type,
+              itemName: current.item.name,
+              status: current.status,
+              ...(current.timeChargedMinutes != null
+                ? { minutes: current.timeChargedMinutes }
+                : { quantity: current.quantity }),
+              reason: reason?.trim() || null,
+              blockHoursReleased: -blockHoursDelta,
+            },
+          },
+        })
+      }
+    })
+
+    await emit({
+      type: EVENT_TYPES.CHARGE_DELETED,
+      entityType: 'charge',
+      entityId: chargeId,
+      actorId: userId,
+      payload: {
+        ticketId: current.ticketId,
+        contractId: current.contractId,
+        chargeType: current.type,
+        previousStatus: current.status,
+        blockHoursReleased: -blockHoursDelta,
+        reason: reason?.trim() || null,
+      },
+    })
+
+    if (current.ticketId) revalidatePath(`/tickets/${current.ticketId}`)
+    return { ok: true }
+  } catch (e) {
+    console.error('[actions/charges] delete failed', e)
+    return { ok: false, error: 'Failed to delete charge' }
+  }
+}

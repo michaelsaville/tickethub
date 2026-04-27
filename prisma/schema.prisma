@@ -278,6 +278,15 @@ model TH_Charge {
   externalRef String?
   clientOpId  String? @unique
 
+  /// Soft-delete: when set, the row is hidden from all charge reads
+  /// (charges table, picker, invoice-core, /reports/unbilled-time, etc.).
+  /// Hard delete is forbidden by claude.md §5 — deletes leave an audit trail
+  /// via TH_TicketEvent of type CHARGE_DELETED.
+  deletedAt     DateTime?
+  deletedById   String?
+  deletedBy     TH_User?  @relation("ChargeDeleter", fields: [deletedById], references: [id])
+  deletedReason String?
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
@@ -285,6 +294,7 @@ model TH_Charge {
   ticketPart  TH_TicketPart?
   appointment TH_Appointment?
 
+  @@index([deletedAt])
   @@map("th_charges")
   @@schema("tickethub")
 }
@@ -799,6 +809,7 @@ model TH_User {
   createdTickets                   TH_Ticket[]                  @relation("CreatedTickets")
   charges                          TH_Charge[]
   approvedCharges                  TH_Charge[]                  @relation("ChargeApprover")
+  deletedCharges                   TH_Charge[]                  @relation("ChargeDeleter")
   purchaseOrdersCreated            TH_PurchaseOrder[]           @relation("PurchaseOrderCreator")
   comments                         TH_TicketComment[]
   appointments                     TH_Appointment[]             @relation("TechAppointments")

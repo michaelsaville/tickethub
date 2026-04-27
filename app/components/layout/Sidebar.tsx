@@ -10,6 +10,7 @@ const PRIMARY_NAV = [
   { href: '/tickets', label: 'Tickets', icon: '🎫' },
   { href: '/clients', label: 'Clients', icon: '👥' },
   { href: '/estimates', label: 'Estimates', icon: '📋' },
+  { href: '/billing', label: 'Billing', icon: '💰' },
   { href: '/invoices', label: 'Invoices', icon: '🧾' },
   { href: '/assets', label: 'Assets', icon: '💻' },
   { href: '/reports', label: 'Reports', icon: '📊' },
