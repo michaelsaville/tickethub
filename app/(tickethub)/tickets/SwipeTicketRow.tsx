@@ -21,6 +21,10 @@ type RowTicket = {
   slaBreached: boolean
   client: { id: string; name: string; shortCode: string | null }
   assignedTo: { id: string; name: string; email: string } | null
+  // Set by the list page when at least one of the ticket's charges is
+  // on a non-deleted invoice. Optional so detail-page renderers that
+  // don't compute it can omit safely.
+  hasInvoice?: boolean
 }
 
 const TRIGGER_PX = 80
@@ -209,6 +213,14 @@ export function SwipeTicketRow({
               value={pending ?? ticket.status}
               className={statusBadgeClass}
             />
+            {ticket.hasInvoice && (
+              <span
+                title="This ticket has charges on at least one invoice"
+                className="rounded-full bg-th-elevated px-1.5 text-[10px] text-th-text-muted"
+              >
+                🧾
+              </span>
+            )}
           </div>
         </Link>
       </div>

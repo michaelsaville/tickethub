@@ -23,6 +23,10 @@ type TicketRow = {
   slaBreached: boolean
   client: { id: string; name: string; shortCode: string | null }
   assignedTo: { id: string; name: string; email: string } | null
+  // True when at least one of the ticket's charges is on a non-deleted
+  // invoice. Computed once on the list page; keeps the per-row render
+  // free of N+1 queries.
+  hasInvoice?: boolean
 }
 
 const STATUSES: TH_TicketStatus[] = [
@@ -194,11 +198,21 @@ export function BulkTicketTable({
                     <SlaBadge ticket={t} />
                   </td>
                   <td className="px-3 py-2">
-                    <EnumLabel
-                      name="TICKET_STATUS"
-                      value={t.status}
-                      className={statusBadgeClass(t.status)}
-                    />
+                    <div className="flex items-center gap-1.5">
+                      <EnumLabel
+                        name="TICKET_STATUS"
+                        value={t.status}
+                        className={statusBadgeClass(t.status)}
+                      />
+                      {t.hasInvoice && (
+                        <span
+                          title="On at least one invoice"
+                          className="rounded-full bg-th-elevated px-1.5 text-[10px] text-th-text-muted"
+                        >
+                          🧾
+                        </span>
+                      )}
+                    </div>
                   </td>
                   <td className="px-3 py-2 text-right font-mono text-[10px] text-th-text-muted">
                     {formatRelative(t.updatedAt)}

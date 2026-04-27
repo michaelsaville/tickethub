@@ -33,6 +33,30 @@ export default async function InvoicesPage({
     },
   })
 
+  // Distinct ticket count per invoice — one round-trip for the page,
+  // not N+1. Postgres-side `distinct` keeps the wire size minimal.
+  const invoiceIds = invoices.map((i) => i.id)
+  const ticketLinks =
+    invoiceIds.length > 0
+      ? await prisma.tH_Charge.findMany({
+          where: {
+            invoiceId: { in: invoiceIds },
+            ticketId: { not: null },
+            deletedAt: null,
+          },
+          distinct: ['invoiceId', 'ticketId'],
+          select: { invoiceId: true, ticketId: true },
+        })
+      : []
+  const ticketCountByInvoice = new Map<string, number>()
+  for (const l of ticketLinks) {
+    if (!l.invoiceId) continue
+    ticketCountByInvoice.set(
+      l.invoiceId,
+      (ticketCountByInvoice.get(l.invoiceId) ?? 0) + 1,
+    )
+  }
+
   // Per-state totals for the currently filtered view — the state reporting
   // hook admins will actually use at filing time.
   const stateTotals = invoices.reduce<
@@ -143,12 +167,25 @@ export default async function InvoicesPage({
                   className="transition-colors hover:bg-th-elevated"
                 >
                   <td className="px-4 py-3 font-mono text-xs text-th-text-muted">
-                    <Link
-                      href={`/invoices/${inv.id}`}
-                      className="hover:text-accent"
-                    >
-                      #{inv.invoiceNumber}
-                    </Link>
+                    <div className="flex items-center gap-1.5">
+                      <Link
+                        href={`/invoices/${inv.id}`}
+                        className="hover:text-accent"
+                      >
+                        #{inv.invoiceNumber}
+                      </Link>
+                      {(() => {
+                        const n = ticketCountByInvoice.get(inv.id) ?? 0
+                        return n > 0 ? (
+                          <span
+                            title={`From ${n} ticket${n === 1 ? '' : 's'}`}
+                            className="rounded-full bg-th-elevated px-1.5 text-[10px] text-th-text-muted"
+                          >
+                            🎫{n > 1 ? n : ''}
+                          </span>
+                        ) : null
+                      })()}
+                    </div>
                   </td>
                   <td className="px-4 py-3">
                     <Link

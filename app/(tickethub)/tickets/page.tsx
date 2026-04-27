@@ -100,7 +100,7 @@ export default async function TicketsPage({
     where.parentId = sp.parentId
   }
 
-  const [tickets, users, clients] = await Promise.all([
+  const [ticketsRaw, users, clients] = await Promise.all([
     prisma.tH_Ticket.findMany({
       where,
       orderBy,
@@ -133,6 +133,31 @@ export default async function TicketsPage({
       orderBy: { name: 'asc' },
     }),
   ])
+
+  // Single-shot lookup: which of these tickets has at least one charge
+  // attached to a non-deleted invoice. One round-trip for the whole page,
+  // not N+1. Stays cheap because it scans by indexed ticketId IN (…).
+  const ticketIds = ticketsRaw.map((t) => t.id)
+  const linkedRows =
+    ticketIds.length > 0
+      ? await prisma.tH_Charge.findMany({
+          where: {
+            ticketId: { in: ticketIds },
+            invoiceId: { not: null },
+            deletedAt: null,
+            invoice: { deletedAt: null },
+          },
+          distinct: ['ticketId'],
+          select: { ticketId: true },
+        })
+      : []
+  const ticketsWithInvoice = new Set(
+    linkedRows.map((r) => r.ticketId).filter((id): id is string => !!id),
+  )
+  const tickets = ticketsRaw.map((t) => ({
+    ...t,
+    hasInvoice: ticketsWithInvoice.has(t.id),
+  }))
 
   const title = activeView?.name ?? 'All Tickets'
 
