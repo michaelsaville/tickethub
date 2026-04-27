@@ -40,3 +40,9 @@ next-env.d.ts
 
 # Docker
 docker-compose.override.yml
+
+# Runtime cron output — append-only log, not source
+cron.log
+
+# One-shot Syncro migration analysis output
+state-backfill-outliers.txt
